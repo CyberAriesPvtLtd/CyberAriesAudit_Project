@@ -1,0 +1,73 @@
+from fastapi import APIRouter, Depends
+from sqlalchemy.orm import Session
+
+from app.database_dependency import get_db
+
+from app.schemas.controls_schema import (
+    ControlsCreate,
+    ControlsResponse,
+    ControlsUpdate,
+)
+
+from app.services.controls_service import (
+    create_control,
+    get_all_controls,
+    get_control_by_id,
+    update_control,
+    delete_control,
+)
+
+router = APIRouter(
+    prefix="/controls",
+    tags=["Controls"]
+)
+
+
+@router.post("/", response_model=ControlsResponse)
+def add_control(
+    control: ControlsCreate,
+    db: Session = Depends(get_db)
+):
+    return create_control(db, control)
+
+
+@router.get("/", response_model=list[ControlsResponse])
+def fetch_controls(
+    db: Session = Depends(get_db)
+):
+    return get_all_controls(db)
+
+
+@router.get("/{control_id}", response_model=ControlsResponse)
+def fetch_control(
+    control_id: str,
+    db: Session = Depends(get_db)
+):
+    return get_control_by_id(
+        db,
+        control_id
+    )
+
+
+@router.put("/{control_id}", response_model=ControlsResponse)
+def edit_control(
+    control_id: str,
+    control: ControlsUpdate,
+    db: Session = Depends(get_db)
+):
+    return update_control(
+        db,
+        control_id,
+        control
+    )
+
+
+@router.delete("/{control_id}")
+def remove_control(
+    control_id: str,
+    db: Session = Depends(get_db)
+):
+    return delete_control(
+        db,
+        control_id
+    )
