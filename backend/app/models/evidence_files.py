@@ -17,7 +17,7 @@ class EvidenceFiles(Base):
     status = Column(String,nullable=False)
     uploaded_by = Column(String,ForeignKey("user.id"),nullable=False)
     audit_control_id = Column(String,ForeignKey("audit_control.id"),nullable=False)
-    createAT = Column(DateTime,default=datetime.now)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     user = relationship("User",back_populates="uploaded_evidence_files")

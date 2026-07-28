@@ -6,6 +6,7 @@ from app.schemas.user_schema import (
     UserCreate,
     UserResponse,
     UserUpdate,
+    UserAdminCompanyUpdate,
 )
 
 from app.services.user_service import (
@@ -13,6 +14,7 @@ from app.services.user_service import (
     get_all_users,
     get_user_by_id,
     update_user,
+    admin_reassign_user_company,
     delete_user,
 )
 
@@ -52,6 +54,15 @@ def edit_user(
     db: Session = Depends(get_db)
 ):
     return update_user(db, user_id, user)
+
+
+@router.put("/{user_id}/reassign-company", response_model=UserResponse)
+def reassign_company(
+    user_id: str,
+    company_data: UserAdminCompanyUpdate,
+    db: Session = Depends(get_db)
+):
+    return admin_reassign_user_company(db, user_id, company_data)
 
 
 @router.delete("/{user_id}")

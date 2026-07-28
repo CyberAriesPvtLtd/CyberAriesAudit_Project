@@ -8,9 +8,8 @@ export default function Login() {
   const { loginAdmin } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
-  
-  const [username, setUsername] = useState('admin@cyberaries.com');
-  const [password, setPassword] = useState('Admin@123');
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
@@ -18,21 +17,21 @@ export default function Login() {
     location.state?.registered ? 'Account created successfully! Please log in.' : ''
   );
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
     setSuccess('');
 
     if (!username || !password) {
-      setError('Please enter both email and password.');
+      setError('Please enter both username and password.');
       return;
     }
 
-    const successLogin = loginAdmin(username, password);
-    if (successLogin) {
+    const result = await loginAdmin(username, password);
+    if (result.success) {
       navigate('/dashboard');
     } else {
-      setError('Invalid email or password.');
+      setError(result.error || 'Invalid credentials.');
     }
   };
 
@@ -70,7 +69,7 @@ export default function Login() {
               <input
                 type="text"
                 className="auth-input-field"
-                placeholder="admin@cyberaries.com"
+                placeholder="admin"
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
@@ -111,9 +110,9 @@ export default function Login() {
               />
               <span>Remember Me</span>
             </label>
-            
-            <Link 
-              to="/forgot-password" 
+
+            <Link
+              to="/forgot-password"
               className="forgot-password-link"
               style={{ color: '#E53935', fontWeight: '600', textDecoration: 'none' }}
             >
@@ -125,10 +124,6 @@ export default function Login() {
             <LogIn size={18} /> Sign In
           </button>
         </form>
-
-        <div style={{ marginTop: '28px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', fontSize: '12px', color: '#64748B', textAlign: 'center' }}>
-          <span style={{ fontWeight: '600' }}>Testing Account:</span> <code style={{ fontSize: '11px', background: '#F1F5F9', padding: '2px 4px', borderRadius: '4px' }}>admin@cyberaries.com</code> / <code style={{ fontSize: '11px', background: '#F1F5F9', padding: '2px 4px', borderRadius: '4px' }}>Admin@123</code>
-        </div>
       </div>
     </div>
   );

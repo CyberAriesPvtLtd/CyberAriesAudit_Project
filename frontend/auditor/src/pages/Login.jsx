@@ -18,23 +18,16 @@ const Login = () => {
   const handleLogin = async (e) => {
     e.preventDefault();
     setErrorMsg('');
-
-    if (!email.trim()) {
-      setErrorMsg('Please enter your email address.');
-      return;
-    }
-    if (!password) {
-      setErrorMsg('Please enter your password.');
-      return;
-    }
-
     setIsSubmitting(true);
-    try {
-      await login(email, password);
+
+    const result = await login(email, password);
+    
+    if (result.success) {
+      setEmail('');
+      setPassword('');
       navigate('/dashboard', { replace: true });
-    } catch (err) {
-      setErrorMsg(err.message || 'Authentication failed. Please check your credentials.');
-    } finally {
+    } else {
+      setErrorMsg(result.error || 'Authentication failed. Please check your credentials.');
       setIsSubmitting(false);
     }
   };
@@ -131,10 +124,6 @@ const Login = () => {
             {isSubmitting ? 'Verifying Credentials...' : 'Sign In'}
           </button>
         </form>
-
-        <div style={{ marginTop: '28px', borderTop: '1px solid var(--border-color)', paddingTop: '20px', fontSize: '12px', color: '#64748B', textAlign: 'center' }}>
-          <span style={{ fontWeight: '600' }}>Testing Account:</span> <code style={{ fontSize: '11px', background: '#F1F5F9', padding: '2px 4px', borderRadius: '4px' }}>rahul.sharma@cyberaries.com</code> / <code style={{ fontSize: '11px', background: '#F1F5F9', padding: '2px 4px', borderRadius: '4px' }}>Auditor@123</code>
-        </div>
       </div>
     </div>
   );

@@ -1,5 +1,6 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
+from datetime import datetime
 
 class AuditFrameworkCreate(BaseModel):
     audit_type: str
@@ -8,7 +9,7 @@ class AuditFrameworkCreate(BaseModel):
     audit_name: str
     target_fy: str
     status: str
-    companyID: str
+    company_id: str = Field(validation_alias="companyID")
 
 
 class AuditFrameworkResponse(BaseModel):
@@ -19,7 +20,8 @@ class AuditFrameworkResponse(BaseModel):
     audit_name: str
     target_fy: str
     status: str
-    companyID: str
+    company_id: str = Field(validation_alias="companyID")
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

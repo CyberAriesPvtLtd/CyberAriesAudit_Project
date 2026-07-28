@@ -23,7 +23,7 @@ class AuditFramework(Base):
         nullable=False
     )
 
-    create_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     company = relationship(
         "Company",

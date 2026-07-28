@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api';
 
 const AuthContext = createContext(null);
 
@@ -215,31 +216,34 @@ export const AuthProvider = ({ children }) => {
 
   const login = async (email, password) => {
     setIsLoading(true);
-    return new Promise((resolve, reject) => {
-      setTimeout(() => {
-        const targetEmail = 'rahul.sharma@cyberaries.com';
-        const targetPassword = 'Auditor@123';
+    try {
+      const response = await api.login(email, password);
+      
+      const userData = {
+        id: response.user.id,
+        email: response.user.email,
+        name: response.user.name,
+        username: response.user.username,
+        role: response.user.role,
+        token: response.access_token,
+      };
 
-        if (email.trim().toLowerCase() === targetEmail && password === targetPassword) {
-          const userData = {
-            email: targetEmail,
-            name: 'Rahul Sharma',
-            role: 'AUDITOR - CYBERARIES'
-          };
-          localStorage.setItem('cyberaries_user', JSON.stringify(userData));
-          setUser(userData);
-          setIsLoading(false);
-          resolve({ success: true });
-        } else {
-          setIsLoading(false);
-          reject(new Error('Invalid email or password. Please try again.'));
-        }
-      }, 500);
-    });
+      localStorage.setItem('cyberaries_user', JSON.stringify(userData));
+      localStorage.setItem('cyberaries_token', response.access_token);
+      setUser(userData);
+      setIsLoading(false);
+      
+      return { success: true };
+    } catch (err) {
+      setIsLoading(false);
+      console.error('[CyberAries] Auditor login failed:', err.response?.data?.detail || err.message);
+      return { success: false, error: err.response?.data?.detail || 'Invalid credentials' };
+    }
   };
 
   const logout = () => {
     localStorage.removeItem('cyberaries_user');
+    localStorage.removeItem('cyberaries_token');
     setUser(null);
   };
 

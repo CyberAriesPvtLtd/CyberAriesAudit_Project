@@ -1,30 +1,12 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import api from '../services/api';
 
 const AppContext = createContext();
 
-const initialCompanies = [
-  { id: 'COM-001', name: 'Aether Technologies', registrationNumber: 'REG-8472910', industry: 'SaaS / Cloud', complianceScore: 94, status: 'Active', auditsCount: 2, createdDate: '2025-01-15' },
-  { id: 'COM-002', name: 'Apex Financial Services', registrationNumber: 'REG-9284715', industry: 'Fintech', complianceScore: 88, status: 'Active', auditsCount: 3, createdDate: '2025-02-10' },
-  { id: 'COM-003', name: 'BioHealth Solutions', registrationNumber: 'REG-5829104', industry: 'Healthcare', complianceScore: 76, status: 'Pending Review', auditsCount: 1, createdDate: '2025-03-01' },
-  { id: 'COM-004', name: 'Nova Logistics Corp', registrationNumber: 'REG-1048572', industry: 'Supply Chain', complianceScore: 91, status: 'Active', auditsCount: 2, createdDate: '2025-03-18' },
-  { id: 'COM-005', name: 'Quantum Retail', registrationNumber: 'REG-3920184', industry: 'E-commerce', complianceScore: 64, status: 'Non-Compliant', auditsCount: 2, createdDate: '2025-04-05' },
-  { id: 'COM-006', name: 'Zenith Security Corp', registrationNumber: 'REG-7582910', industry: 'Cybersecurity', complianceScore: 99, status: 'Active', auditsCount: 1, createdDate: '2025-04-20' },
-];
-
-const initialClients = [
-  { id: 'CLI-001', name: 'Sarah Connor', company: 'Aether Technologies', email: 's.connor@aether.io', username: 'sarah_connor', status: 'Active', auditPhase: 'Evidence Collection' },
-  { id: 'CLI-002', name: 'Marcus Aurelius', company: 'Apex Financial Services', email: 'm.aurelius@apexfin.com', username: 'marcus_aurelius', status: 'Active', auditPhase: 'Reviewing Controls' },
-  { id: 'CLI-003', name: 'Jane Goodall', company: 'BioHealth Solutions', email: 'j.goodall@biohealth.org', username: 'jane_goodall', status: 'Pending Review', auditPhase: 'Initial Assessment' },
-  { id: 'CLI-004', name: 'Tony Stark', company: 'Nova Logistics Corp', email: 't.stark@novalog.com', username: 'tony_stark', status: 'Active', auditPhase: 'Audit Signed Off' },
-  { id: 'CLI-005', name: 'Bruce Wayne', company: 'Quantum Retail', email: 'b.wayne@quantumretail.co', username: 'bruce_wayne', status: 'Suspended', auditPhase: 'Remediation Required' },
-];
-
-const initialAuditors = [
-  { id: 'AUD-001', name: 'Dr. Evelyn Foster', email: 'evelyn.f@cyberaries.com', username: 'evelyn_foster', status: 'Active', assignments: 2 },
-  { id: 'AUD-002', name: 'Christian Wolff', email: 'christian.w@cyberaries.com', username: 'christian_wolff', status: 'Active', assignments: 3 },
-  { id: 'AUD-003', name: 'Lisbeth Salander', email: 'lisbeth.s@cyberaries.com', username: 'lisbeth_salander', status: 'Active', assignments: 1 },
-  { id: 'AUD-004', name: 'Sherlock Holmes', email: 'sherlock.h@cyberaries.com', username: 'sherlock_holmes', status: 'Inactive', assignments: 0 },
-];
+// Companies, Clients, Auditors — fetched from backend on mount
+const initialCompanies = [];
+const initialClients = [];
+const initialAuditors = [];
 
 const initialAudits = [
   { id: 'AUDIT-101', company: 'Aether Technologies', client: 'Sarah Connor', auditor: 'Dr. Evelyn Foster', rulebook: 'SOC 2 Type II', status: 'In Progress', progress: 68, dueDate: '2026-08-15' },
@@ -66,20 +48,9 @@ export const AppProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [companies, setCompanies] = useState(() => {
-    const saved = localStorage.getItem('cyberaries_companies');
-    return saved ? JSON.parse(saved) : initialCompanies;
-  });
-
-  const [clients, setClients] = useState(() => {
-    const saved = localStorage.getItem('cyberaries_clients');
-    return saved ? JSON.parse(saved) : initialClients;
-  });
-
-  const [auditors, setAuditors] = useState(() => {
-    const saved = localStorage.getItem('cyberaries_auditors');
-    return saved ? JSON.parse(saved) : initialAuditors;
-  });
+  const [companies, setCompanies] = useState([]);
+  const [clients, setClients] = useState([]);
+  const [auditors, setAuditors] = useState([]);
 
   const [audits, setAudits] = useState(() => {
     const saved = localStorage.getItem('cyberaries_audits');
@@ -120,6 +91,94 @@ export const AppProvider = ({ children }) => {
       }
     };
   });
+
+  // Track if backend is reachable
+  const [backendConnected, setBackendConnected] = useState(false);
+
+  // ─── Helper: Map backend company response to frontend shape ───
+  const mapCompanyFromDb = (dbCompany) => ({
+    id: dbCompany.id,
+    name: dbCompany.company_name,
+    registrationNumber: dbCompany.registration_no,
+    industry: dbCompany.industry || '',
+    complianceScore: dbCompany.complianceScore ?? 100,
+    status: dbCompany.status || 'Active',
+    auditsCount: dbCompany.auditsCount ?? 0,
+    createdDate: dbCompany.created_at ? new Date(dbCompany.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+  });
+
+  // ─── Helper: Map backend user response to frontend client shape ───
+  const mapUserToClient = (dbUser, companiesList) => {
+    const company = companiesList.find(c => c.id === dbUser.company_id);
+    return {
+      id: dbUser.id,
+      name: dbUser.name,
+      email: dbUser.email,
+      username: dbUser.username,
+      role: dbUser.role,
+      company: company?.name || '',
+      company_id: dbUser.company_id,
+      status: 'Active',
+      auditPhase: 'Initial Assessment',
+      createdDate: dbUser.created_at ? new Date(dbUser.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+    };
+  };
+
+  // ─── Helper: Map backend user response to frontend auditor shape ───
+  const mapUserToAuditor = (dbUser) => ({
+    id: dbUser.id,
+    name: dbUser.name,
+    email: dbUser.email,
+    username: dbUser.username,
+    role: dbUser.role,
+    status: 'Active',
+    assignments: 0,
+    createdDate: dbUser.created_at ? new Date(dbUser.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+  });
+
+  // ─── Fetch Companies & Users from Backend on Mount ────────────
+  const fetchDataFromBackend = useCallback(async () => {
+    try {
+      // Test backend connectivity first
+      await api.testDbConnection();
+      setBackendConnected(true);
+
+      // Fetch companies
+      const dbCompanies = await api.getCompanies();
+      if (dbCompanies && dbCompanies.length > 0) {
+        const mapped = dbCompanies.map(mapCompanyFromDb);
+        setCompanies(mapped);
+      }
+
+      // Fetch users and split into clients / auditors
+      const dbUsers = await api.getUsers();
+      if (dbUsers && dbUsers.length > 0) {
+        // We need companies list for name lookup
+        const companiesForLookup = dbCompanies && dbCompanies.length > 0
+          ? dbCompanies.map(mapCompanyFromDb)
+          : companies;
+
+        const dbClients = dbUsers.filter(u => u.role === 'client');
+        const dbAuditors = dbUsers.filter(u => u.role === 'auditor');
+
+        if (dbClients.length > 0) {
+          setClients(dbClients.map(u => mapUserToClient(u, companiesForLookup)));
+        }
+        if (dbAuditors.length > 0) {
+          setAuditors(dbAuditors.map(u => mapUserToAuditor(u)));
+        }
+      }
+
+      console.log('[CyberAries] Backend connected — data loaded from PostgreSQL.');
+    } catch (err) {
+      setBackendConnected(false);
+      console.warn('[CyberAries] Backend unreachable — using local/dummy data.', err.message);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchDataFromBackend();
+  }, [fetchDataFromBackend]);
 
   // Sync to LocalStorage
   useEffect(() => {
@@ -162,53 +221,78 @@ export const AppProvider = ({ children }) => {
     setActivities(prev => [newActivity, ...prev]);
   };
 
-  const addCompany = (company) => {
-    const id = `COM-${String(companies.length + 1).padStart(3, '0')}`;
-    const newCompany = {
-      id,
-      complianceScore: 100,
-      auditsCount: 0,
-      createdDate: new Date().toISOString().split('T')[0],
-      status: 'Active',
-      ...company,
-    };
-    setCompanies(prev => [...prev, newCompany]);
-    logActivity(currentUser?.fullName || 'Admin', 'Company', `Added new company: ${company.name}`);
+  const addCompany = async (company) => {
+    try {
+      // Send to backend — backend generates the ID
+      const created = await api.createCompany({
+        company_name: company.name,
+        registration_no: company.registrationNumber,
+      });
+      const mapped = mapCompanyFromDb(created);
+      // Merge frontend-only fields (industry, status, etc.)
+      mapped.industry = company.industry || '';
+      mapped.status = 'Active';
+      setCompanies(prev => [...prev, mapped]);
+      logActivity(currentUser?.fullName || 'Admin', 'Company', `Added new company: ${company.name}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to create company:', err.response?.data?.detail || err.message);
+      alert(`Failed to create company: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const updateCompany = (updatedCompany) => {
-    setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c));
-    logActivity(currentUser?.fullName || 'Admin', 'Company', `Updated company parameters for: ${updatedCompany.name}`);
+  const updateCompany = async (updatedCompany) => {
+    try {
+      await api.updateCompany(updatedCompany.id, {
+        company_name: updatedCompany.name,
+        registration_no: updatedCompany.registrationNumber,
+      });
+      setCompanies(prev => prev.map(c => c.id === updatedCompany.id ? { ...c, ...updatedCompany } : c));
+      logActivity(currentUser?.fullName || 'Admin', 'Company', `Updated company parameters for: ${updatedCompany.name}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to update company:', err.response?.data?.detail || err.message);
+      alert(`Failed to update company: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const addClient = (client) => {
-    const id = `CLI-${String(clients.length + 1).padStart(3, '0')}`;
-    const newClient = {
-      id,
-      status: client.status || 'Active',
-      auditPhase: 'Initial Assessment',
-      ...client,
-    };
-    delete newClient.password;
-    delete newClient.confirmPassword;
-    setClients(prev => [...prev, newClient]);
-    
-    // Update company audits count or links if needed
-    logActivity(currentUser?.fullName || 'Admin', 'Client', `Added new client: ${client.name} for ${client.company}`);
+  const addClient = async (client) => {
+    try {
+      // Find company_id from company name
+      const company = companies.find(c => c.name === client.company);
+      const created = await api.createUser({
+        name: client.name,
+        email: client.email,
+        username: client.username,
+        password: client.password,
+        role: 'client',
+        company_id: company?.id || null,
+      });
+      const mapped = mapUserToClient(created, companies);
+      mapped.company = client.company; // preserve company name from form
+      setClients(prev => [...prev, mapped]);
+      logActivity(currentUser?.fullName || 'Admin', 'Client', `Added new client: ${client.name} for ${client.company}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to create client:', err.response?.data?.detail || err.message);
+      alert(`Failed to create client: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const addAuditor = (auditor) => {
-    const id = `AUD-${String(auditors.length + 1).padStart(3, '0')}`;
-    const newAuditor = {
-      id,
-      assignments: 0,
-      status: auditor.status || 'Active',
-      ...auditor,
-    };
-    delete newAuditor.password;
-    delete newAuditor.confirmPassword;
-    setAuditors(prev => [...prev, newAuditor]);
-    logActivity(currentUser?.fullName || 'Admin', 'Auditor', `Registered new auditor: ${auditor.name}`);
+  const addAuditor = async (auditor) => {
+    try {
+      const created = await api.createUser({
+        name: auditor.name,
+        email: auditor.email,
+        username: auditor.username,
+        password: auditor.password,
+        role: 'auditor',
+        company_id: null,
+      });
+      const mapped = mapUserToAuditor(created);
+      setAuditors(prev => [...prev, mapped]);
+      logActivity(currentUser?.fullName || 'Admin', 'Auditor', `Registered new auditor: ${auditor.name}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to create auditor:', err.response?.data?.detail || err.message);
+      alert(`Failed to create auditor: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
   const addAudit = (audit) => {
@@ -299,33 +383,26 @@ export const AppProvider = ({ children }) => {
     logActivity('Registration', 'Security', `Registered new administrator account: ${adminData.username}`);
   };
 
-  const loginAdmin = (username, password) => {
-    const registered = localStorage.getItem('cyberaries_registered_admin');
-    const admin = registered ? JSON.parse(registered) : {
-      username: 'admin',
-      password: 'password',
-      fullName: 'Administrator',
-      email: 'admin@cyberaries.com',
-      phone: '+1 (555) 019-2834',
-    };
-
-    if (
-      (username === admin.username && password === admin.password) ||
-      (username === 'admin@cyberaries.com' && password === 'Admin@123')
-    ) {
+  const loginAdmin = async (username, password) => {
+    try {
+      const response = await api.login(username, password);
+      
       const userData = {
-        username: 'admin',
-        fullName: admin.fullName,
-        email: 'admin@cyberaries.com',
-        phone: admin.phone,
-        role: 'Admin',
+        ...response.user,
+        token: response.access_token,
+        mustChangePassword: response.must_change_password
       };
+
       setCurrentUser(userData);
       localStorage.setItem('cyberaries_user', JSON.stringify(userData));
-      logActivity(admin.fullName, 'Security', 'User logged in successfully.');
-      return true;
+      localStorage.setItem('cyberaries_token', response.access_token);
+      logActivity(userData.name, 'Security', 'User logged in successfully via Backend API.');
+      
+      return { success: true, mustChangePassword: response.must_change_password };
+    } catch (err) {
+      console.error('[CyberAries] Login failed:', err.response?.data?.detail || err.message);
+      return { success: false, error: err.response?.data?.detail || 'Invalid credentials' };
     }
-    return false;
   };
 
   const logout = () => {
@@ -334,6 +411,7 @@ export const AppProvider = ({ children }) => {
     }
     setCurrentUser(null);
     localStorage.removeItem('cyberaries_user');
+    localStorage.removeItem('cyberaries_token');
   };
 
   const addControl = (control) => {
@@ -419,6 +497,7 @@ export const AppProvider = ({ children }) => {
       rulebook,
       activities,
       settings,
+      backendConnected,
       addCompany,
       addClient,
       addAuditor,
@@ -435,7 +514,8 @@ export const AppProvider = ({ children }) => {
       removeClientFromAuditor,
       updateAudit,
       deleteAudit,
-      updateCompany
+      updateCompany,
+      fetchDataFromBackend
     }}>
       {children}
     </AppContext.Provider>

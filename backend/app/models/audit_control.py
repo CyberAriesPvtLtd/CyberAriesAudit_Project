@@ -16,7 +16,7 @@ class AuditControl(Base):
     evaluated_at = Column(DateTime,nullable=False)
     framework_id = Column(String,ForeignKey("audit_framework.id"),nullable=False)
     control_id = Column(String,ForeignKey("controls.id"),nullable=False)
-    create_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     user = relationship("User",back_populates="assigned_audit_controls")
