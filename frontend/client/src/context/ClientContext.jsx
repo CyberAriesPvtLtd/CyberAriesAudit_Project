@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
+import api from '../services/api';
 
 const ClientContext = createContext();
 
@@ -163,23 +164,33 @@ export const ClientProvider = ({ children }) => {
   };
 
   // Auth Operations
-  const login = (email, password) => {
-    if ((email === 'sarah@aether.io' || email === 'client') && password === 'password') {
+  const login = async (email, password) => {
+    try {
+      const response = await api.login(email, password);
+      
       const userData = {
-        fullName: 'Sarah Connor',
-        email: 's.connor@aether.io',
-        phone: '+1 (555) 234-5678',
-        companyName: 'Aether Technologies',
-        industry: 'SaaS / Cloud',
-        role: 'Client Officer',
-        avatarInitials: 'SC',
+        id: response.user.id,
+        fullName: response.user.name,
+        email: response.user.email,
+        username: response.user.username,
+        role: response.user.role,
+        companyId: response.user.company_id,
+        token: response.access_token,
+        avatarInitials: response.user.name
+          ? response.user.name.split(' ').map(n => n[0]).join('').toUpperCase()
+          : 'CL',
       };
+
       setCurrentUser(userData);
       localStorage.setItem('cc_user', JSON.stringify(userData));
+      localStorage.setItem('cc_token', response.access_token);
       addActivityLog(userData.fullName, 'System', 'Client logged in successfully.');
-      return true;
+      
+      return { success: true };
+    } catch (err) {
+      console.error('[CyberAries] Client login failed:', err.response?.data?.detail || err.message);
+      return { success: false, error: err.response?.data?.detail || 'Invalid credentials' };
     }
-    return false;
   };
 
   const logout = () => {
@@ -188,6 +199,7 @@ export const ClientProvider = ({ children }) => {
     }
     setCurrentUser(null);
     localStorage.removeItem('cc_user');
+    localStorage.removeItem('cc_token');
   };
 
   // Activity Log helper
