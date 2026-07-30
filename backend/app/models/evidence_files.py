@@ -12,6 +12,7 @@ class EvidenceFiles(Base):
     id = Column(String,primary_key=True,default=generate_evidence_file_id)
     file_name = Column(String,nullable=False)
     file_url = Column(String,nullable=False)
+    requirement_fulfilled = Column(String,nullable=True)
     ai_notes = Column(String,nullable=True)
     auditor_notes = Column(String,nullable=True)
     status = Column(String,nullable=False)
