@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 
-
 class AuditControlCreate(BaseModel):
     status: str
     assigned_to: str

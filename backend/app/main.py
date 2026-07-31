@@ -1,7 +1,9 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from app.database import Base, engine
+from app.database import Base, engine, SessionLocal
+from app.utils.seed import seed_default_admin
 
 # Import Models
 from app.models import (
@@ -16,6 +18,7 @@ from app.models import (
 # Import Routers
 from app.routers.company_router import router as company_router
 from app.routers.user_router import router as user_router
+from app.routers.auth_router import router as auth_router
 from app.routers.audit_framework_router import router as audit_framework_router
 from app.routers.controls_router import router as controls_router
 from app.routers.audit_control_router import router as audit_control_router
@@ -24,12 +27,25 @@ from app.routers.evidence_files_router import router as evidence_files_router
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
+# Seed default admin user
+with SessionLocal() as db:
+    seed_default_admin(db)
+
 app = FastAPI(
     title="Aries Audit Backend",
     version="1.0.0"
 )
 
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Register Routers
+app.include_router(auth_router)
 app.include_router(company_router)
 app.include_router(user_router)
 app.include_router(audit_framework_router)

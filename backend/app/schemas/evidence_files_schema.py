@@ -2,7 +2,6 @@ from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
 
-
 class EvidenceFilesCreate(BaseModel):
     file_name: str
     file_url: str
@@ -29,7 +28,7 @@ class EvidenceFilesResponse(BaseModel):
     status: str
     uploaded_by: str
     audit_control_id: str
-    create_at: datetime
+    created_at: datetime
 
     class Config:
         from_attributes = True
