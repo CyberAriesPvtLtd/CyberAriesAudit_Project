@@ -38,15 +38,14 @@ def fetch_controls(
     return get_all_controls(db)
 
 
-@router.get("/{control_id}", response_model=ControlsResponse)
-def fetch_control(
-    control_id: str,
-    db: Session = Depends(get_db)
+@router.get("/", response_model=list[ControlsResponse])
+def fetch_controls(
+    audit_type: str | None = None,
+    audit_category: str | None = None,
+    audit_subcategory: str | None = None,
+    db: Session = Depends(get_db),
 ):
-    return get_control_by_id(
-        db,
-        control_id
-    )
+    return get_all_controls(db, audit_type, audit_category, audit_subcategory)
 
 
 @router.put("/{control_id}", response_model=ControlsResponse)
