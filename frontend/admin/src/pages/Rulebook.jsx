@@ -44,9 +44,37 @@ export default function Rulebook() {
   ];
 
   const filterOptions = [
-    { label: 'Domain', key: 'domain', options: ['Govern (GV)', 'Identify (ID)', 'Protect (PR)', 'Detect (DE)', 'Respond (RS)', 'Recover (RC)'] },
-    { label: 'Status', key: 'status', options: ['Active', 'Suspended'] }
+    { 
+      label: 'Framework', 
+      key: 'framework', 
+      options: ['CSCRF', 'ISO27001', 'SOC 2', 'IFSCA', 'IRDAI'] 
+    },
+    { 
+      label: 'Category', 
+      key: 'category', 
+      options: ['AIF', 'PMS'] 
+    },
+    { 
+      label: 'Sub Category', 
+      key: 'subCategory', 
+      options: ['Self Certified', 'Small Size', 'Mid Size', 'Qualified'] 
+    }
   ];
+
+  const rulebookData = React.useMemo(() => {
+    return rulebook.map((item, index) => {
+      const frameworks = ['CSCRF', 'ISO27001', 'SOC 2', 'IFSCA', 'IRDAI'];
+      const categories = ['AIF', 'PMS'];
+      const subCategories = ['Self Certified', 'Small Size', 'Mid Size', 'Qualified'];
+
+      return {
+        ...item,
+        framework: item.framework || frameworks[index % frameworks.length],
+        category: item.category || categories[index % categories.length],
+        subCategory: item.subCategory || subCategories[index % subCategories.length],
+      };
+    });
+  }, [rulebook]);
 
   const tableActions = [
     { label: 'Inspect Guideline', onClick: (row) => alert(`Control Details: ${row.name}\n${row.description}`) },
@@ -91,9 +119,9 @@ export default function Rulebook() {
 
       <ExcelTable
         columns={columns}
-        data={rulebook}
+        data={rulebookData}
         searchPlaceholder="Search controls by ID, name, standard mapping..."
-        searchKeys={['id', 'name', 'standard', 'domain']}
+        searchKeys={['id', 'name', 'standard', 'domain', 'framework', 'category', 'subCategory']}
         filterOptions={filterOptions}
         actions={tableActions}
         tableName="CyberAries_Rulebook_Controls"

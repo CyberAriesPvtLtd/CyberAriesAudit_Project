@@ -799,14 +799,16 @@ body {
 .toolbar-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   flex-grow: 1;
-  max-width: 500px;
+  max-width: 850px;
 }
 
 .table-search-wrapper {
   position: relative;
   flex-grow: 1;
+  min-width: 180px;
 }
 
 .table-search-input {
