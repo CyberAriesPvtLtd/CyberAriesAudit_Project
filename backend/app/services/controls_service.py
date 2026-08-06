@@ -5,24 +5,15 @@ from app.models.controls import Controls
 
 
 def create_control(db: Session, control_data):
-
-    existing_control = db.query(Controls).filter(
-        Controls.control_code == control_data.control_code
-    ).first()
+    existing_control = db.query(Controls).filter(Controls.control_id == control_data.control_id).first()
 
     if existing_control:
         raise HTTPException(
             status_code=400,
-            detail="Control Code already exists"
+            detail=f"Control '{control_data.control_id}' already exists."
         )
 
-    control = Controls(
-        control_code=control_data.control_code,
-        control_desc=control_data.control_desc,
-        audit_category=control_data.audit_category,
-        audit_subcategory=control_data.audit_subcategory,
-        audit_type=control_data.audit_type
-    )
+    control = Controls(**control_data.model_dump())
 
     db.add(control)
     db.commit()
@@ -31,14 +22,31 @@ def create_control(db: Session, control_data):
     return control
 
 
-def get_all_controls(db: Session):
-    return db.query(Controls).all()
+def get_all_controls(
+    db: Session,
+    audit_type: str = None,
+    audit_category: str = None,
+    audit_subcategory: str = None,
+):
+    query = db.query(Controls)
+
+    if audit_type:
+        query = query.filter(Controls.audit_type == audit_type)
+    if audit_category:
+        query = query.filter(Controls.audit_category == audit_category)
+    if audit_subcategory:
+        query = query.filter(Controls.audit_subcategory == audit_subcategory)
+
+    return query.order_by(
+        Controls.audit_category,
+        Controls.control_id,
+    ).all()
 
 
-def get_control_by_id(db: Session, control_id: str):
+def get_control_by_id(db: Session, db_id: str):
 
     control = db.query(Controls).filter(
-        Controls.id == control_id
+        Controls.id == db_id
     ).first()
 
     if not control:
@@ -52,12 +60,12 @@ def get_control_by_id(db: Session, control_id: str):
 
 def update_control(
     db: Session,
-    control_id: str,
+    db_id: str,
     control_data
 ):
 
     control = db.query(Controls).filter(
-        Controls.id == control_id
+        Controls.id == db_id
     ).first()
 
     if not control:
@@ -66,9 +74,17 @@ def update_control(
             detail="Control not found"
         )
 
-    update_dict = control_data.model_dump(exclude_unset = True)
+    update_dict = control_data.model_dump(exclude_unset=True)
 
-    for key,value in update_dict.items():
+    # Re-check uniqueness if control_id is changing.
+    if "control_id" in update_dict and update_dict["control_id"] != control.control_id:
+        if db.query(Controls).filter(Controls.control_id == update_dict["control_id"]).first():
+            raise HTTPException(
+                status_code=400,
+                detail="Another control with this control_id already exists."
+            )
+
+    for key, value in update_dict.items():
         setattr(control, key, value)
 
     db.commit()
@@ -79,11 +95,11 @@ def update_control(
 
 def delete_control(
     db: Session,
-    control_id: str
+    db_id: str
 ):
 
     control = db.query(Controls).filter(
-        Controls.id == control_id
+        Controls.id == db_id
     ).first()
 
     if not control:
