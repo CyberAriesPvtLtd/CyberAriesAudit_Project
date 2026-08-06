@@ -8,6 +8,7 @@ import TopNav from './components/TopNav';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import MyAudits from './pages/MyAudits';
+import FrameworkManagement from './pages/FrameworkManagement';
 import ControlDetails from './pages/ControlDetails';
 import Findings from './pages/Findings';
 import AuditStatus from './pages/AuditStatus';
@@ -82,6 +83,30 @@ function AppRoutes() {
         element={
           <ProtectedLayout>
             <MyAudits />
+          </ProtectedLayout>
+        } 
+      />
+      <Route 
+        path="/framework-management" 
+        element={
+          <ProtectedLayout>
+            <FrameworkManagement />
+          </ProtectedLayout>
+        } 
+      />
+      <Route 
+        path="/framework" 
+        element={
+          <ProtectedLayout>
+            <FrameworkManagement />
+          </ProtectedLayout>
+        } 
+      />
+      <Route 
+        path="/rulebook" 
+        element={
+          <ProtectedLayout>
+            <FrameworkManagement />
           </ProtectedLayout>
         } 
       />

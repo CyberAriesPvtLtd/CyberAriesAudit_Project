@@ -24,20 +24,9 @@ const initialAudits = [
   { id: 'AUDIT-113', company: 'BioHealth Solutions', client: 'Jane Goodall', auditor: 'Christian Wolff', rulebook: 'ISO 27001', status: 'In Progress', progress: 30, dueDate: '2026-10-30' },
 ];
 
-const initialRulebook = [
-  { id: 'CSCRF-GV-001', name: 'Organizational Governance Strategy', domain: 'Govern (GV)', standard: 'CSCRF GV-1.1', framework: 'CSCRF', category: 'AIF', subCategory: 'Qualified', status: 'Active', description: 'Establish and maintain a cybersecurity governance framework integrated with risk assessment guidelines.', version: 'v1.0.2', lastUpdated: '2026-06-12' },
-  { id: 'CSCRF-ID-001', name: 'Asset Inventory & Classification', domain: 'Identify (ID)', standard: 'CSCRF ID-1.2', framework: 'CSCRF', category: 'PMS', subCategory: 'Mid Size', status: 'Active', description: 'Maintain a real-time catalog of all network services, endpoints, data assets, and software components.', version: 'v1.1.0', lastUpdated: '2026-05-24' },
-  { id: 'ISO-27001-A5', name: 'Information Security Policies', domain: 'Govern (GV)', standard: 'ISO 27001 A.5.1', framework: 'ISO27001', category: 'AIF', subCategory: 'Self Certified', status: 'Active', description: 'Formulate, publish, and periodically review institutional cybersecurity and information handling policies.', version: 'v2.0.0', lastUpdated: '2026-05-10' },
-  { id: 'SOC2-CC6-001', name: 'Logical Access Controls & Monitoring', domain: 'Protect (PR)', standard: 'SOC 2 CC6.1', framework: 'SOC 2', category: 'PMS', subCategory: 'Small Size', status: 'Active', description: 'Enforce principle of least privilege, multi-factor authentication, and privileged account telemetry.', version: 'v1.3.0', lastUpdated: '2026-06-18' },
-  { id: 'IFSCA-CY-001', name: 'Cybersecurity Governance & Resilience', domain: 'Govern (GV)', standard: 'IFSCA Guideline 3.2', framework: 'IFSCA', category: 'AIF', subCategory: 'Qualified', status: 'Active', description: 'Maintain operational resilience framework aligned with IFSCA capital market technology standards.', version: 'v1.0.1', lastUpdated: '2026-07-02' },
-  { id: 'IRDAI-CS-001', name: 'Insurance Data Encryption Standards', domain: 'Protect (PR)', standard: 'IRDAI CS-04', framework: 'IRDAI', category: 'PMS', subCategory: 'Mid Size', status: 'Active', description: 'Implement end-to-end encryption for policyholder data in transit and at rest across cloud infrastructure.', version: 'v1.1.2', lastUpdated: '2026-06-25' },
-  { id: 'CSCRF-PR-001', name: 'Identity & Access Controls', domain: 'Protect (PR)', standard: 'CSCRF PR-2.1', framework: 'CSCRF', category: 'AIF', subCategory: 'Self Certified', status: 'Active', description: 'Enforce multi-factor authentication (MFA) and granular role-based authorization for administrative layers.', version: 'v2.0.1', lastUpdated: '2026-07-01' },
-  { id: 'CSCRF-DE-001', name: 'Continuous Monitoring Telemetry', domain: 'Detect (DE)', standard: 'CSCRF DE-3.4', framework: 'CSCRF', category: 'PMS', subCategory: 'Small Size', status: 'Active', description: 'Deploy security event monitoring log aggregates to detect malicious operational behaviors instantly.', version: 'v1.0.4', lastUpdated: '2026-06-30' },
-  { id: 'ISO-27001-A9', name: 'User Access Management & Authentication', domain: 'Protect (PR)', standard: 'ISO 27001 A.9.2', framework: 'ISO27001', category: 'PMS', subCategory: 'Qualified', status: 'Active', description: 'Ensure objective user registration, access provisioning, and privilege revocation procedures.', version: 'v2.1.0', lastUpdated: '2026-04-20' },
-  { id: 'SOC2-CC7-001', name: 'System Operations & Incident Management', domain: 'Respond (RS)', standard: 'SOC 2 CC7.2', framework: 'SOC 2', category: 'AIF', subCategory: 'Mid Size', status: 'Active', description: 'Execute incident detection, response, escalation, and remediation protocols across infrastructure.', version: 'v1.0.0', lastUpdated: '2026-07-08' },
-  { id: 'CSCRF-RS-001', name: 'Incident Containment Plan', domain: 'Respond (RS)', standard: 'CSCRF RS-4.2', framework: 'CSCRF', category: 'AIF', subCategory: 'Qualified', status: 'Active', description: 'Execute standardized procedures to contain network security incidents and mitigate impact.', version: 'v2.1.0', lastUpdated: '2026-07-08' },
-  { id: 'CSCRF-RC-001', name: 'Disaster Recovery Operations', domain: 'Recover (RC)', standard: 'CSCRF RC-5.1', framework: 'CSCRF', category: 'PMS', subCategory: 'Self Certified', status: 'Active', description: 'Conduct automated database recovery procedures and back up configurations to air-gapped vaults.', version: 'v1.0.0', lastUpdated: '2026-04-15' },
-];
+import { initialFrameworkRules } from '../data/frameworkRulesData';
+
+const initialRulebook = initialFrameworkRules;
 
 const initialActivities = [
   { id: 'ACT-001', user: 'System', type: 'System', message: 'Automated compliance score recalculation completed successfully.', timestamp: '2026-07-09T14:45:00Z' },
@@ -65,7 +54,17 @@ export const AppProvider = ({ children }) => {
 
   const [rulebook, setRulebook] = useState(() => {
     const saved = localStorage.getItem('cyberaries_rulebook');
-    return saved ? JSON.parse(saved) : initialRulebook;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].frameworkRules) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return initialFrameworkRules;
   });
 
   const [activities, setActivities] = useState(() => {
@@ -205,6 +204,7 @@ export const AppProvider = ({ children }) => {
 
   useEffect(() => {
     localStorage.setItem('cyberaries_rulebook', JSON.stringify(rulebook));
+    localStorage.setItem('cyberaries_framework_rules', JSON.stringify(rulebook));
   }, [rulebook]);
 
   useEffect(() => {
@@ -420,16 +420,13 @@ export const AppProvider = ({ children }) => {
     localStorage.removeItem('cyberaries_token');
   };
 
-  const addControl = (control) => {
-    const newControl = {
-      status: 'Active',
-      version: 'v1.0.0',
-      lastUpdated: new Date().toISOString().split('T')[0],
-      ...control,
-    };
-    setRulebook(prev => [...prev, newControl]);
-    logActivity(currentUser?.fullName || 'Admin', 'Settings', `Added new CSCRF control: ${control.id} (${control.name})`);
+  const uploadFramework = (newRules) => {
+    const rulesList = Array.isArray(newRules) ? newRules : [newRules];
+    setRulebook(prev => [...rulesList, ...prev]);
+    logActivity(currentUser?.fullName || 'Admin', 'Framework', `Uploaded framework with ${rulesList.length} rules.`);
   };
+
+  const addControl = uploadFramework;
 
   const assignAuditToClient = (companyName, clientName, frameworkName, auditorName) => {
     const exists = audits.some(a => a.company === companyName && a.rulebook === frameworkName);
@@ -509,6 +506,7 @@ export const AppProvider = ({ children }) => {
       addAuditor,
       addAudit,
       addControl,
+      uploadFramework,
       updateSettings,
       registerAdmin,
       loginAdmin,

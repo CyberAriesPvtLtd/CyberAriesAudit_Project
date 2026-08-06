@@ -4,6 +4,7 @@ import { useClient } from '../context/ClientContext';
 import { 
   LayoutDashboard, 
   ClipboardList, 
+  BookOpen,
   HelpCircle, 
   Activity, 
   FileText, 
@@ -18,7 +19,8 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'My Audits / Controls', path: '/my-audits', icon: ClipboardList },
+    { name: 'My Audits', path: '/my-audits', icon: ClipboardList },
+    { name: 'Framework Management', path: '/framework-management', icon: BookOpen },
     { name: 'Questions & Findings', path: '/findings', icon: HelpCircle },
     { name: 'Audit Status', path: '/audit-status', icon: Activity },
     { name: 'Final Report', path: '/final-report', icon: FileText },
