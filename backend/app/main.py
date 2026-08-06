@@ -4,6 +4,7 @@ from sqlalchemy import text
 
 from app.database import Base, engine, SessionLocal
 from app.utils.seed import seed_default_admin
+from app.utils.seed_controls import seed_controls
 
 # Import Models
 from app.models import (
@@ -27,9 +28,16 @@ from app.routers.evidence_files_router import router as evidence_files_router
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
-# Seed default admin user
+# Seed default admin user and controls if empty
 with SessionLocal() as db:
     seed_default_admin(db)
+    
+    # Automatically seed controls if the table is empty
+    if not db.query(Controls).first():
+        print("[CyberAries] Controls table is empty. Auto-seeding from Excel files...")
+        seed_controls(db)
+    else:
+        print("[CyberAries] Controls table already populated. Skipping auto-seed.")
 
 app = FastAPI(
     title="Aries Audit Backend",
