@@ -33,34 +33,23 @@ from app.models.controls import Controls
 
 CONTROLS_DIR = Path(__file__).resolve().parents[1] / "data" / "controls"
 
-# Which scope each workbook maps to. Add a new entry per sheet you onboard.
-FILE_CONFIG = {
-    "PMS_Controls_Self_Certified_RE.xlsx": {
-        "audit_type": "SEBI CSCRF",
-        "audit_category": "PMS",
-        "audit_subcategory": "Self-Certified RE",
-    },
-    "AIF_Controls_Self_Certified_RE.xlsx": {
-        "audit_type": "SEBI CSCRF",
-        "audit_category": "AIF",
-        "audit_subcategory": "Self-Certified RE",
-    },
-}
+# We no longer hardcode files. The script will automatically scan all .xlsx files
 
-# Excel header -> model field. Headers are matched exactly (after whitespace
-# normalisation), so a renamed column fails loudly instead of loading nulls.
+# Map database fields to possible Excel column headers (case-insensitive)
 COLUMNS = {
-    "sr_no": "S.No",
-    "control_code": "SEBI Clause/Standard Code",
-    "control_domain": "Control Domain",
-    "control_desc": "Control Description",
-    "primary_evidence": "Primary (Mandatory) Evidence",
-    "secondary_evidence": "Secondary (Supporting) Evidence",
+    "framework_rules": ["sebi clause/standard code", "iso clause", "standard code"],
+    "control_domain": ["control domain"],
+    "control_desc": ["control description"],
+    "primary_evidence": ["primary (mandatory) evidence"],
+    "secondary_evidence": ["secondary (supporting) evidence"],
+    "audit_type": ["audit_framework", "audit_framwork"],
+    "audit_category": ["audit_category"],
+    "audit_subcategory": ["audit_subcategory"],
 }
 
 # Fields refreshed on an existing row when the sheet changes.
 UPDATABLE_FIELDS = (
-    "sr_no",
+    "framework_rules",
     "control_domain",
     "control_desc",
     "primary_evidence",
@@ -70,6 +59,7 @@ UPDATABLE_FIELDS = (
 # The source sheets separate multiple evidence items with ";" or a newline.
 # Commas are NOT separators — they occur inside individual evidence items.
 _SPLIT_RE = re.compile(r"[;\n]+")
+_SPLIT_SEBI_RE = re.compile(r"[,;\n]+")
 
 
 # --------------------------------------------------------------------------
@@ -109,47 +99,76 @@ def split_evidence(value):
     return items
 
 
+def split_framework_rules(value):
+    """
+    Split framework rules by comma, semicolon, or newline.
+    """
+    if value is None:
+        return []
+    items, seen = [], set()
+    for chunk in _SPLIT_SEBI_RE.split(str(value)):
+        item = clean_text(chunk)
+        if not item:
+            continue
+        key = item.upper()
+        if key in seen:
+            continue
+        seen.add(key)
+        items.append(key)
+    return items
+
+
 def parse_workbook(path: Path):
     """Return a list of control dicts from one workbook."""
-    config = FILE_CONFIG.get(path.name)
-    if config is None:
-        raise ValueError(f"No FILE_CONFIG entry for '{path.name}'")
-
     worksheet = openpyxl.load_workbook(path, data_only=True).active
 
     header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True))
-    header = [clean_text(cell) for cell in header_row]
+    header = [clean_text(cell).lower() for cell in header_row if clean_text(cell)]
 
     index = {}
-    for field, title in COLUMNS.items():
-        if title not in header:
+    for field, possibilities in COLUMNS.items():
+        found = False
+        for title in possibilities:
+            if title in header:
+                index[field] = header.index(title)
+                found = True
+                break
+        if not found:
             raise ValueError(
-                f"{path.name}: expected column '{title}' but found {header}"
+                f"{path.name}: expected column for '{field}' but found {header}"
             )
-        index[field] = header.index(title)
 
     controls = []
     for row_number, row in enumerate(
         worksheet.iter_rows(min_row=2, values_only=True), start=2
     ):
-        control_code = clean_text(row[index["control_code"]])
+        audit_type = clean_text(row[index["audit_type"]])
+        audit_category = clean_text(row[index["audit_category"]])
+        audit_subcategory = clean_text(row[index["audit_subcategory"]])
+        
+        framework_rules = split_framework_rules(row[index["framework_rules"]])
         control_desc = clean_text(row[index["control_desc"]])
 
         # Skip blank spacer rows rather than inserting junk.
-        if not control_code or not control_desc:
+        if not framework_rules or not control_desc or not audit_type:
             continue
 
-        sr_no = row[index["sr_no"]]
+        first_rule = framework_rules[0] if framework_rules else "UNKNOWN"
+        control_id_raw = f"{audit_type}-{audit_category}-{audit_subcategory}-{first_rule}"
+        control_id = control_id_raw.replace(" ", "")
+
         controls.append(
             {
-                "sr_no": int(sr_no) if isinstance(sr_no, (int, float)) else None,
-                "control_code": control_code,
+                "audit_type": audit_type,
+                "audit_category": audit_category,
+                "audit_subcategory": audit_subcategory,
+                "control_id": control_id,
+                "framework_rules": framework_rules,
                 "control_domain": clean_text(row[index["control_domain"]]),
                 "control_desc": control_desc,
                 "primary_evidence": split_evidence(row[index["primary_evidence"]]),
                 "secondary_evidence": split_evidence(row[index["secondary_evidence"]]),
                 "_source": f"{path.name}:{row_number}",
-                **config,
             }
         )
 
@@ -160,21 +179,18 @@ def load_all_controls():
     """Parse every configured workbook and fail on duplicate scoped keys."""
     parsed, seen = [], {}
 
-    for filename in FILE_CONFIG:
-        path = CONTROLS_DIR / filename
-        if not path.exists():
-            raise FileNotFoundError(f"Control workbook not found: {path}")
+    # Read all .xlsx files dynamically except cross reference maps
+    for path in CONTROLS_DIR.glob("*.xlsx"):
+        if "CrossReference" in path.name:
+            continue
+            
+        print(f"[CyberAries] Parsing {path.name}...")
 
         for control in parse_workbook(path):
-            key = (
-                control["control_code"],
-                control["audit_type"],
-                control["audit_category"],
-                control["audit_subcategory"],
-            )
+            key = control["control_id"]
             if key in seen:
                 raise ValueError(
-                    f"Duplicate control {key} at {control['_source']} "
+                    f"Duplicate control_id {key} at {control['_source']} "
                     f"(already seen at {seen[key]})"
                 )
             seen[key] = control["_source"]
@@ -196,12 +212,7 @@ def seed_controls(db: Session, dry_run: bool = False):
     # bad import does not silently persist.
     existing, duplicates = {}, []
     for row in db.query(Controls).order_by(Controls.create_at).all():
-        key = (
-            row.control_code,
-            row.audit_type,
-            row.audit_category,
-            row.audit_subcategory,
-        )
+        key = row.control_id
         if key in existing:
             duplicates.append(key)
             continue  # keep the oldest, ignore the rest
@@ -218,12 +229,7 @@ def seed_controls(db: Session, dry_run: bool = False):
 
     for control in parsed:
         payload = {k: v for k, v in control.items() if not k.startswith("_")}
-        key = (
-            payload["control_code"],
-            payload["audit_type"],
-            payload["audit_category"],
-            payload["audit_subcategory"],
-        )
+        key = payload["control_id"]
 
         row = existing.get(key)
         if row is None:

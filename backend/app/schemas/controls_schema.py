@@ -21,7 +21,8 @@ def _coerce_evidence(value):
 
 
 class ControlsCreate(BaseModel):
-    control_code: str
+    control_id: str
+    framework_rules: List[str] = []
     control_desc: str
     audit_type: str
     audit_category: str
@@ -29,7 +30,6 @@ class ControlsCreate(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: List[str] = []
     secondary_evidence: List[str] = []
-    sr_no: Optional[int] = None
 
     @field_validator("primary_evidence", "secondary_evidence", mode="before")
     @classmethod
@@ -38,7 +38,8 @@ class ControlsCreate(BaseModel):
 
 
 class ControlsUpdate(BaseModel):
-    control_code: Optional[str] = None
+    control_id: Optional[str] = None
+    framework_rules: Optional[List[str]] = None
     control_desc: Optional[str] = None
     audit_type: Optional[str] = None
     audit_category: Optional[str] = None
@@ -46,7 +47,6 @@ class ControlsUpdate(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: Optional[List[str]] = None
     secondary_evidence: Optional[List[str]] = None
-    sr_no: Optional[int] = None
 
     @field_validator("primary_evidence", "secondary_evidence", mode="before")
     @classmethod
@@ -56,7 +56,8 @@ class ControlsUpdate(BaseModel):
 
 class ControlsResponse(BaseModel):
     id: str
-    control_code: str
+    control_id: str
+    framework_rules: List[str] = []
     control_desc: str
     audit_type: str
     audit_category: str
@@ -64,7 +65,6 @@ class ControlsResponse(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: List[str] = []
     secondary_evidence: List[str] = []
-    sr_no: Optional[int] = None
 
     # Comma-joined convenience fields for tables and exports. The arrays above
     # remain the source of truth.
