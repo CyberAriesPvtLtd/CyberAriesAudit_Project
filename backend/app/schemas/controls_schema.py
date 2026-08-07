@@ -1,6 +1,6 @@
 from pydantic import BaseModel, computed_field, field_validator
 from typing import List, Optional
-from datetime import datetime
+
 
 def _coerce_evidence(value):
     """
@@ -65,7 +65,6 @@ class ControlsResponse(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: List[str] = []
     secondary_evidence: List[str] = []
-    created_at: Optional[datetime] = None
 
     # Comma-joined convenience fields for tables and exports. The arrays above
     # remain the source of truth.

@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from app.utils.security import require_admin
 
 from app.database_dependency import get_db
 
@@ -23,7 +24,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=AuditControlResponse)
+@router.post("/", response_model=AuditControlResponse, dependencies=[Depends(require_admin)])
 def add_audit_control(
     audit_control: AuditControlCreate,
     db: Session = Depends(get_db)
@@ -49,7 +50,7 @@ def fetch_audit_control(
     )
 
 
-@router.put("/{audit_control_id}", response_model=AuditControlResponse)
+@router.put("/{audit_control_id}", response_model=AuditControlResponse, dependencies=[Depends(require_admin)])
 def edit_audit_control(
     audit_control_id: str,
     audit_control: AuditControlUpdate,

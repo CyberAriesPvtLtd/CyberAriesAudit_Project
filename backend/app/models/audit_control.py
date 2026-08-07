@@ -11,9 +11,9 @@ class AuditControl(Base):
 
     id = Column(String,primary_key=True,default=generate_audit_control_id)
     status = Column(String,nullable=False)
-    assigned_to = Column(String,ForeignKey("user.id"),nullable=False)
+    assigned_to = Column(String,ForeignKey("user.id"),nullable=True)
     auditor_notes = Column(String,nullable=True)
-    evaluated_at = Column(DateTime,nullable=False)
+    evaluated_at = Column(DateTime,nullable=True)
     framework_id = Column(String,ForeignKey("audit_framework.id"),nullable=False)
     control_id = Column(String,ForeignKey("controls.id"),nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

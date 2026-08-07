@@ -9,15 +9,16 @@ from app.models.audit_framework import AuditFramework
 
 def create_audit_control(db: Session, audit_control_data):
 
-    user = db.query(User).filter(
-        User.id == audit_control_data.assigned_to
-    ).first()
+    if audit_control_data.assigned_to:
+        user = db.query(User).filter(
+            User.id == audit_control_data.assigned_to
+        ).first()
 
-    if not user:
-        raise HTTPException(
-            status_code=404,
-            detail="User not found"
-        )
+        if not user:
+            raise HTTPException(
+                status_code=404,
+                detail="User not found"
+            )
 
     framework = db.query(AuditFramework).filter(
         AuditFramework.id == audit_control_data.framework_id
