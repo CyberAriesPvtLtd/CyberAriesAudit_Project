@@ -1,187 +1,63 @@
-import React, { useState, useRef } from 'react';
-import { useApp } from '../context/AppContext';
+import React, { useState, useEffect } from 'react';
 import ExcelTable from '../components/ExcelTable';
 import Modal from '../components/Modal';
 import { 
-  FileSpreadsheet, 
-  UploadCloud, 
-  CheckCircle2, 
-  AlertCircle, 
   FileText, 
   ExternalLink, 
-  X, 
-  Check,
-  ChevronRight,
-  Info
+  X,
+  CheckCircle2
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { formatDateDDMMYYYY } from '../data/frameworkRulesData';
+import { 
+  formatDateDDMMYYYY, 
+  CONTROL_DOMAINS, 
+  FRAMEWORK_TYPES, 
+  FRAMEWORK_CATEGORIES,
+  initialFrameworkRules
+} from '../data/frameworkRulesData';
 
-export default function Rulebook() {
-  const { rulebook, uploadFramework } = useApp();
+export default function FrameworkManagement({ isReadOnly = true }) {
+  // Read shared framework rules from localStorage (uploaded/updated by Admin)
+  const [rulebook, setRulebook] = useState(() => {
+    const saved = localStorage.getItem('cyberaries_framework_rules') || localStorage.getItem('cyberaries_rulebook');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].frameworkRules) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return initialFrameworkRules;
+  });
 
-  // Upload Modal State
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  // Sync state if localStorage changes
+  useEffect(() => {
+    const handleStorageChange = () => {
+      const saved = localStorage.getItem('cyberaries_framework_rules') || localStorage.getItem('cyberaries_rulebook');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].frameworkRules) {
+            setRulebook(parsed);
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
+  }, []);
 
   // Detail Modal States for Table Rows
   const [viewingDescriptionRow, setViewingDescriptionRow] = useState(null);
   const [viewingDocumentsRow, setViewingDocumentsRow] = useState(null);
 
-  // Upload Form Fields
-  const [selectedFile, setSelectedFile] = useState(null);
-  const [referenceLink, setReferenceLink] = useState('');
-  const [description, setDescription] = useState('');
-  const [validationError, setValidationError] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-
   // Toast State
   const [toastMessage, setToastMessage] = useState('');
-
-  const fileInputRef = useRef(null);
-
-  // Helper to trigger success toast
-  const showToast = (msg) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage('');
-    }, 4000);
-  };
-
-  // Reset upload form
-  const handleCloseUploadModal = () => {
-    setIsModalOpen(false);
-    setSelectedFile(null);
-    setReferenceLink('');
-    setDescription('');
-    setValidationError('');
-    setIsDragging(false);
-  };
-
-  // File Handlers
-  const handleFileSelect = (file) => {
-    if (!file) return;
-    const name = file.name.toLowerCase();
-    if (!name.endsWith('.xlsx') && !name.endsWith('.xls')) {
-      setValidationError('Only .xlsx and .xls Excel files are supported.');
-      setSelectedFile(null);
-      return;
-    }
-    setSelectedFile(file);
-    setValidationError('');
-  };
-
-  const handleInputChange = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      handleFileSelect(e.target.files[0]);
-    }
-  };
-
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-
-  const handleDragLeave = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-  };
-
-  const handleDrop = (e) => {
-    e.preventDefault();
-    setIsDragging(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
-    }
-  };
-
-  // Parse Excel File & Upload
-  const handleUploadSubmit = async (e) => {
-    e.preventDefault();
-
-    if (!selectedFile) {
-      setValidationError('Please select or drag & drop an Excel file (.xlsx or .xls) to upload.');
-      return;
-    }
-
-    try {
-      const parsedRules = await parseExcelData(selectedFile, referenceLink, description);
-      uploadFramework(parsedRules);
-      showToast('Framework Excel uploaded and processed successfully!');
-      handleCloseUploadModal();
-    } catch (err) {
-      console.error('Failed to parse framework excel:', err);
-      setValidationError('Failed to parse Excel file. Please ensure it is a valid .xlsx or .xls document.');
-    }
-  };
-
-  const parseExcelData = (file, refLink, desc) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonRows = XLSX.utils.sheet_to_json(worksheet);
-
-          const today = new Date();
-          const dd = String(today.getDate()).padStart(2, '0');
-          const mm = String(today.getMonth() + 1).padStart(2, '0');
-          const yyyy = today.getFullYear();
-          const formattedDate = `${dd}-${mm}-${yyyy}`;
-
-          if (jsonRows && jsonRows.length > 0) {
-            const parsed = jsonRows.map((row, index) => ({
-              id: `FR-${Date.now()}-${index}`,
-              frameworkRules: row['Framework Rules'] || row['Framework Rule'] || row['Rule'] || row['Control Name'] || `FR-${index + 1}: ${file.name.replace(/\.[^/.]+$/, '')} Standard`,
-              controlDomain: row['Control Domain'] || row['Domain'] || 'Govern (GV)',
-              frameworkType: row['Framework Type'] || row['Type'] || row['Framework'] || 'SEBI CSCRF',
-              frameworkCategory: row['Framework Category'] || row['Category'] || 'Governance & Risk Management',
-              frameworkSubcategory: row['Framework Subcategory'] || row['Subcategory'] || 'Cybersecurity Policy & Strategy',
-              description: row['Description'] || desc || 'Imported framework rule from uploaded excel specification file.',
-              primaryDocuments: row['Primary Documents'] 
-                ? (Array.isArray(row['Primary Documents']) ? row['Primary Documents'] : String(row['Primary Documents']).split(',').map(s => s.trim())) 
-                : [file.name],
-              secondaryDocuments: row['Secondary Documents'] 
-                ? (Array.isArray(row['Secondary Documents']) ? row['Secondary Documents'] : String(row['Secondary Documents']).split(',').map(s => s.trim())) 
-                : (refLink ? [refLink] : ['Framework_Mapping_Doc.pdf']),
-              lastUpdated: row['Last Updated'] || formattedDate,
-              referenceLink: refLink || row['Reference Link'] || ''
-            }));
-            resolve(parsed);
-          } else {
-            const fallback = [{
-              id: `FR-${Date.now()}-1`,
-              frameworkRules: `FR-001: ${file.name.replace(/\.[^/.]+$/, '')} Framework Rule`,
-              controlDomain: 'Govern (GV)',
-              frameworkType: 'SEBI CSCRF',
-              frameworkCategory: 'Governance & Risk Management',
-              frameworkSubcategory: 'Cybersecurity Policy & Strategy',
-              description: desc || `Uploaded compliance framework rule set derived from file ${file.name}.`,
-              primaryDocuments: [file.name],
-              secondaryDocuments: refLink ? [refLink] : ['Compliance_Audit_Spec.pdf'],
-              lastUpdated: formattedDate,
-              referenceLink: refLink || ''
-            }];
-            resolve(fallback);
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = (error) => reject(error);
-      reader.readAsArrayBuffer(file);
-    });
-  };
-
-  const formatFileSize = (bytes) => {
-    if (!bytes) return '0 Bytes';
-    const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
-  };
 
   const getDocsArray = (docsProp) => {
     if (Array.isArray(docsProp)) return docsProp;
@@ -191,7 +67,7 @@ export default function Rulebook() {
     return [];
   };
 
-  // Domain Badge Helper
+  // Domain Badge Helper (EXACT ADMIN BADGES)
   const renderDomainBadge = (domain) => {
     const domStr = domain || '';
     let bg = '#E8F0FE'; let color = '#1A73E8'; let border = '#ADCEFE';
@@ -235,12 +111,8 @@ export default function Rulebook() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', maxWidth: '160px', overflow: 'hidden' }}>
         <span
           className={`compact-doc-chip ${isPrimary ? 'primary-chip' : 'secondary-chip'}`}
-          title="Click to view documents"
-          onClick={(e) => {
-            e.stopPropagation();
-            setViewingDocumentsRow(row);
-          }}
-          style={{ maxWidth: '110px', flexShrink: 1, cursor: 'pointer' }}
+          title={firstDoc}
+          style={{ maxWidth: '110px', flexShrink: 1 }}
         >
           <FileText size={11} style={{ flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstDoc}</span>
@@ -264,7 +136,7 @@ export default function Rulebook() {
   };
 
   // ----------------------------------------------------
-  // TABLE COLUMNS (STRICT WIDTHS & ZERO OVERLAP)
+  // TABLE COLUMNS (EXACTLY MATCHING ADMIN)
   // ----------------------------------------------------
   const columns = [
     {
@@ -273,39 +145,21 @@ export default function Rulebook() {
       sortable: true,
       width: '210px',
       cell: (row) => {
-        const rulesList = row.frameworkRulesList || [];
-        const fallbackText = row.frameworkRules || '';
+        const fullText = row.frameworkRules || '';
+        const parts = fullText.split(':');
+        const code = parts[0]?.trim();
+        const name = parts.length > 1 ? parts.slice(1).join(':').trim() : fullText;
 
-        // If we have a parsed array from the backend, render as vertical pill list
-        if (rulesList.length > 0) {
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '195px' }}>
-              {rulesList.map((rule, idx) => (
-                <span key={idx} style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  fontFamily: 'monospace',
-                  backgroundColor: '#F0F4FF',
-                  color: '#1A3A6B',
-                  border: '1px solid #C7D7F0',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: '190px'
-                }} title={rule}>
-                  {rule}
-                </span>
-              ))}
-            </div>
-          );
-        }
-
-        // No rules available
-        return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '195px', overflow: 'hidden' }}>
+            <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {code}
+            </span>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>
+              {name}
+            </span>
+          </div>
+        );
       }
     },
     {
@@ -413,35 +267,29 @@ export default function Rulebook() {
   ];
 
   // ----------------------------------------------------
-  // SEARCH & FILTERS (Dynamically generated from actual data)
+  // SEARCH & FILTERS
   // ----------------------------------------------------
-  
-  // Extract unique values from the current rulebook data for the dropdowns
-  const uniqueFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))].sort();
-  const uniqueControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))].sort();
-  const uniqueFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))].sort();
-
   const filterOptions = [
     {
       label: 'Framework Type',
       key: 'frameworkType',
-      options: uniqueFrameworkTypes
+      options: FRAMEWORK_TYPES
     },
     {
       label: 'Control Domain',
       key: 'controlDomain',
-      options: uniqueControlDomains
+      options: CONTROL_DOMAINS
     },
     {
       label: 'Framework Category',
       key: 'frameworkCategory',
-      options: uniqueFrameworkCategories
+      options: FRAMEWORK_CATEGORIES
     }
   ];
 
   return (
     <div className="page-container">
-      {/* Success Toast */}
+      {/* Toast Notification */}
       {toastMessage && (
         <div style={{
           position: 'fixed',
@@ -471,7 +319,7 @@ export default function Rulebook() {
         </div>
       )}
 
-      {/* Page Header */}
+      {/* Page Header (EXACT ADMIN HEADER & SUBTITLE) */}
       <div className="page-header">
         <div className="page-title-section">
           <h1 className="page-title">Compliance Rulebook & Controls</h1>
@@ -481,13 +329,10 @@ export default function Rulebook() {
           <button className="btn btn-secondary" onClick={() => alert('Exporting framework rules database...')}>
             Export Database
           </button>
-          <button className="btn btn-primary" onClick={() => setIsModalOpen(true)}>
-            + Add Control
-          </button>
         </div>
       </div>
 
-      {/* Framework Management Table */}
+      {/* Framework Management Table (EXACT ADMIN TABLE) */}
       <ExcelTable
         columns={columns}
         data={rulebook}
@@ -497,169 +342,7 @@ export default function Rulebook() {
         tableName="CyberAries_Framework_Management"
       />
 
-      {/* MODAL 1: Upload Framework Excel */}
-      <Modal isOpen={isModalOpen} onClose={handleCloseUploadModal} title="Upload Framework Excel">
-        <form onSubmit={handleUploadSubmit}>
-          {/* FIELD 1: Excel Upload */}
-          <div className="form-group" style={{ marginBottom: '20px' }}>
-            <label className="form-label" style={{ fontWeight: '600', marginBottom: '8px', display: 'block' }}>
-              Excel Upload <span style={{ color: 'var(--primary)' }}>*</span>
-            </label>
-
-            {!selectedFile ? (
-              <div 
-                className={`excel-upload-dropzone ${isDragging ? 'drag-active' : ''}`}
-                onDragOver={handleDragOver}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  accept=".xlsx, .xls"
-                  onChange={handleInputChange}
-                  style={{ display: 'none' }}
-                />
-                
-                <div className="excel-upload-icon-wrapper">
-                  <UploadCloud size={28} />
-                </div>
-
-                <div style={{ textAlign: 'center' }}>
-                  <p className="excel-upload-title">Drag & Drop Excel File Here</p>
-                  <p className="excel-upload-subtitle" style={{ margin: '4px 0 10px 0' }}>or click to browse your computer</p>
-                  <button 
-                    type="button" 
-                    className="btn btn-secondary"
-                    style={{ fontSize: '13px', padding: '6px 14px' }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      fileInputRef.current?.click();
-                    }}
-                  >
-                    <FileSpreadsheet size={15} style={{ marginRight: '6px' }} />
-                    Browse File
-                  </button>
-                </div>
-                
-                <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
-                  Supports: .xlsx, .xls
-                </p>
-              </div>
-            ) : (
-              <div className="excel-upload-success-card">
-                <div className="excel-upload-success-info">
-                  <div style={{
-                    width: '42px',
-                    height: '42px',
-                    borderRadius: '8px',
-                    backgroundColor: '#137333',
-                    color: '#FFFFFF',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center'
-                  }}>
-                    <FileSpreadsheet size={22} />
-                  </div>
-                  <div className="excel-upload-file-details">
-                    <span className="excel-upload-file-name">{selectedFile.name}</span>
-                    <span className="excel-upload-file-meta">
-                      {formatFileSize(selectedFile.size)} • Ready for import
-                    </span>
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '4px',
-                    fontSize: '12px',
-                    fontWeight: '600',
-                    color: '#137333',
-                    backgroundColor: '#FFFFFF',
-                    padding: '4px 10px',
-                    borderRadius: '9999px',
-                    border: '1px solid #A8DAB5'
-                  }}>
-                    <Check size={14} /> Upload Success State
-                  </span>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedFile(null);
-                      setValidationError('');
-                    }}
-                    style={{
-                      background: 'none',
-                      border: 'none',
-                      color: 'var(--text-secondary)',
-                      cursor: 'pointer',
-                      padding: '4px',
-                      borderRadius: '4px'
-                    }}
-                    title="Remove file"
-                  >
-                    <X size={18} />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {validationError && (
-              <div className="excel-upload-error-msg">
-                <AlertCircle size={15} />
-                <span>{validationError}</span>
-              </div>
-            )}
-          </div>
-
-          {/* FIELD 2: Reference Link (Optional) */}
-          <div className="form-group" style={{ marginBottom: '20px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label className="form-label" style={{ fontWeight: '500', margin: 0 }}>Reference Link</label>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Optional</span>
-            </div>
-            <input
-              type="url"
-              className="form-input"
-              placeholder="https://example.com/framework-document"
-              value={referenceLink}
-              onChange={(e) => setReferenceLink(e.target.value)}
-            />
-          </div>
-
-          {/* FIELD 3: Description (Optional) */}
-          <div className="form-group" style={{ marginBottom: '24px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-              <label className="form-label" style={{ fontWeight: '500', margin: 0 }}>Description</label>
-              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Optional</span>
-            </div>
-            <textarea
-              className="form-input"
-              style={{ minHeight: '90px', fontFamily: 'inherit', resize: 'vertical' }}
-              placeholder="Enter framework upload notes or description..."
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-            />
-          </div>
-
-          {/* Modal Footer Buttons */}
-          <div className="modal-footer" style={{ margin: '24px -24px -24px -24px' }}>
-            <button type="button" className="btn btn-secondary" onClick={handleCloseUploadModal}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary">
-              <UploadCloud size={16} style={{ marginRight: '6px' }} />
-              Upload Framework
-            </button>
-          </div>
-        </form>
-      </Modal>
-
-      {/* MODAL 2: Full Description Viewer Modal */}
+      {/* MODAL 1: Full Description Viewer Modal (EXACT ADMIN MODAL) */}
       <Modal 
         isOpen={!!viewingDescriptionRow} 
         onClose={() => setViewingDescriptionRow(null)} 
@@ -714,7 +397,7 @@ export default function Rulebook() {
         )}
       </Modal>
 
-      {/* MODAL 3: All Documents Viewer Modal */}
+      {/* MODAL 2: All Documents Viewer Modal (EXACT ADMIN MODAL) */}
       <Modal 
         isOpen={!!viewingDocumentsRow} 
         onClose={() => setViewingDocumentsRow(null)} 

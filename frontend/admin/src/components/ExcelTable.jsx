@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Search, Download, ChevronLeft, ChevronRight, MoreVertical, ArrowUpDown, Filter } from 'lucide-react';
+import * as XLSX from 'xlsx';
 
 export default function ExcelTable({
   columns,
@@ -152,24 +153,24 @@ export default function ExcelTable({
 
   const handleExportExcel = (e) => {
     e.stopPropagation();
-    // Excel XML format or simple tab-delimited XLS representation.
-    // For universal compatibility without large libraries, tab-delimited Unicode txt/xls is standard.
-    let tabContent = columns.map(col => col.header).join('\t') + '\n';
-    sortedData.forEach(row => {
-      tabContent += columns.map(col => {
-        const val = row[col.accessor];
-        return val !== undefined && val !== null ? String(val).replace(/\t/g, ' ') : '';
-      }).join('\t') + '\n';
+    
+    const exportData = sortedData.map(row => {
+      const rowData = {};
+      columns.forEach(col => {
+        let val = row[col.accessor];
+        if (Array.isArray(val)) {
+            val = val.join(', ');
+        }
+        rowData[col.header] = val;
+      });
+      return rowData;
     });
 
-    const blob = new Blob([new Uint8Array([0xEF, 0xBB, 0xBF]), tabContent], { type: 'application/vnd.ms-excel;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.setAttribute("href", url);
-    link.setAttribute("download", `${tableName}_Excel_${new Date().toISOString().split('T')[0]}.xls`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+    const worksheet = XLSX.utils.json_to_sheet(exportData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Sheet1");
+    
+    XLSX.writeFile(workbook, `${tableName}_Excel_${new Date().toISOString().split('T')[0]}.xlsx`);
   };
 
   // Status badge selector helper

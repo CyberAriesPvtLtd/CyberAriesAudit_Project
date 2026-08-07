@@ -109,6 +109,33 @@ export const deleteUser = async (id) => {
   return data;
 };
 
+// ─── Controls / Rulebook Endpoints ──────────────────────────────
+
+export const getControls = async (params = {}) => {
+  const { data } = await axiosClient.get('/controls/', { params });
+  return data;
+};
+
+export const getControlById = async (id) => {
+  const { data } = await axiosClient.get(`/controls/${id}`);
+  return data;
+};
+
+export const createControl = async (controlData) => {
+  const { data } = await axiosClient.post('/controls/', controlData);
+  return data;
+};
+
+export const updateControl = async (id, updates) => {
+  const { data } = await axiosClient.put(`/controls/${id}`, updates);
+  return data;
+};
+
+export const deleteControl = async (id) => {
+  const { data } = await axiosClient.delete(`/controls/${id}`);
+  return data;
+};
+
 // Default export for convenience
 const api = {
   testDbConnection,
@@ -125,6 +152,11 @@ const api = {
   deleteUser,
   login,
   changePassword,
+  getControls,
+  getControlById,
+  createControl,
+  updateControl,
+  deleteControl,
 };
 
 export default api;

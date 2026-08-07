@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   LayoutDashboard, 
   ClipboardList, 
+  BookOpen,
   CheckCircle, 
   Cpu, 
   FileText, 
@@ -28,6 +29,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   const menuItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
     { name: 'Assigned Audits', path: '/assigned-audits', icon: ClipboardList },
+    { name: 'Framework Management', path: '/framework-management', icon: BookOpen },
     { name: 'Evidence Review', path: '/evidence-review', icon: CheckCircle },
     { name: 'AI Findings', path: '/ai-findings', icon: Cpu },
     { name: 'Draft Reports', path: '/draft-reports', icon: FileText },

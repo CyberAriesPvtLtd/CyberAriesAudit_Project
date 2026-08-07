@@ -6,6 +6,7 @@ import Layout from './components/layout/Layout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
 import AssignedAudits from './pages/AssignedAudits';
+import FrameworkManagement from './pages/FrameworkManagement';
 import EvidenceReview from './pages/EvidenceReview';
 import AuditReview from './pages/AuditReview';
 import AIFindings from './pages/AIFindings';
@@ -33,6 +34,9 @@ function App() {
                     <Route path="/" element={<Navigate to="/dashboard" replace />} />
                     <Route path="/dashboard" element={<Dashboard />} />
                     <Route path="/assigned-audits" element={<AssignedAudits />} />
+                    <Route path="/framework-management" element={<FrameworkManagement />} />
+                    <Route path="/framework" element={<FrameworkManagement />} />
+                    <Route path="/rulebook" element={<FrameworkManagement />} />
                     <Route path="/evidence-review" element={<EvidenceReview />} />
                     <Route path="/audit-review/:auditId" element={<AuditReview />} />
                     <Route path="/ai-findings" element={<AIFindings />} />

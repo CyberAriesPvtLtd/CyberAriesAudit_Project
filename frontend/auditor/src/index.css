@@ -1445,3 +1445,125 @@ button {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* Description Clamping & Read More */
+.description-clamp-container {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 380px;
+}
+
+.description-clamped-text {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  word-break: break-word;
+  margin: 0;
+}
+
+.read-more-btn {
+  background: none;
+  border: none;
+  color: var(--primary);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+  margin-top: 2px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  transition: opacity 0.15s ease;
+}
+
+.read-more-btn:hover {
+  text-decoration: underline;
+  opacity: 0.85;
+}
+
+/* Horizontal Compact Document Chips */
+.horizontal-docs-container {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: nowrap;
+  max-width: 220px;
+}
+
+.compact-doc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11.5px;
+  font-weight: 500;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 110px;
+  box-sizing: border-box;
+  flex-shrink: 0;
+}
+
+.compact-doc-chip.primary-chip {
+  background-color: rgba(229, 57, 53, 0.08);
+  color: var(--primary);
+  border: 1px solid rgba(229, 57, 53, 0.2);
+}
+
+.compact-doc-chip.secondary-chip {
+  background-color: #F1F5F9;
+  color: var(--text-secondary);
+  border: 1px solid #CBD5E1;
+}
+
+.more-docs-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  background-color: #F1F5F9;
+  color: var(--text-primary);
+  border: 1px solid #CBD5E1;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+  transition: all 0.15s ease;
+}
+
+.more-docs-badge:hover {
+  background-color: var(--primary-light);
+  color: var(--primary);
+  border-color: rgba(229, 57, 53, 0.3);
+}
+
+/* Consistent Row Height & Vertical Alignment */
+.excel-table {
+  width: 100%;
+  table-layout: fixed;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.excel-table th,
+.excel-table td {
+  vertical-align: middle !important;
+  height: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
