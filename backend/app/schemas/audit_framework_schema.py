@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 
@@ -14,6 +14,7 @@ class AuditFrameworkCreate(BaseModel):
         validation_alias="companyID",
         serialization_alias="companyID"
     )
+    assigned_auditors: Optional[List[str]] = []
 
 
 class AuditFrameworkResponse(BaseModel):
@@ -28,6 +29,7 @@ class AuditFrameworkResponse(BaseModel):
         validation_alias="companyID",
         serialization_alias="companyID"
     )
+    assigned_auditors: Optional[List[str]] = []
     created_at: Optional[datetime] = None
 
     class Config:
@@ -41,6 +43,7 @@ class AuditFrameworkUpdate(BaseModel):
     audit_subcategory: Optional[str] = None
     audit_name: Optional[str] = None
     target_fy: Optional[str] = None
+    assigned_auditors: Optional[List[str]] = None
 
 
 class AuditFramworkStatusOverride(BaseModel):

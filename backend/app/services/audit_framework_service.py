@@ -26,7 +26,8 @@ def create_audit_framework(db: Session, audit_data):
         audit_name=audit_data.audit_name,
         target_fy=audit_data.target_fy,
         status=audit_data.status,
-        company_id=audit_data.company_id
+        company_id=audit_data.company_id,
+        assigned_auditors=audit_data.assigned_auditors
     )
 
     db.add(audit_framework)

@@ -1,4 +1,5 @@
 from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -22,6 +23,7 @@ class AuditFramework(Base):
         ForeignKey("company.id"),
         nullable=False
     )
+    assigned_auditors = Column(ARRAY(String), default=list)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
