@@ -5,13 +5,13 @@ import Modal from '../components/Modal';
 import { ShieldAlert, CheckCircle, UserCheck, Trash2, Shield } from 'lucide-react';
 
 export default function Auditors() {
-  const { 
-    auditors, 
-    addAuditor, 
-    audits, 
+  const {
+    auditors,
+    addAuditor,
+    audits,
     companies,
-    assignClientToAuditor, 
-    removeClientFromAuditor 
+    assignClientToAuditor,
+    removeClientFromAuditor
   } = useApp();
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -59,18 +59,18 @@ export default function Auditors() {
     { header: 'Full Name', accessor: 'name', sortable: true },
     { header: 'Official Email', accessor: 'email', sortable: true },
     { header: 'Username', accessor: 'username', sortable: true },
-    { 
-      header: 'Assigned Clients', 
-      accessor: 'clientsCount', 
+    {
+      header: 'Assigned Clients',
+      accessor: 'clientsCount',
       sortable: false,
       cell: (row) => {
         const count = getAuditorClients(row.name).length;
         const badgeLabel = count === 1 ? '1 Client' : `${count} Clients`;
         return (
-          <button 
-            className="badge badge-active" 
-            style={{ 
-              border: 'none', 
+          <button
+            className="badge badge-active"
+            style={{
+              border: 'none',
               cursor: 'pointer',
               fontWeight: '600',
               padding: '6px 12px',
@@ -83,18 +83,18 @@ export default function Auditors() {
         );
       }
     },
-    { 
-      header: 'Assigned Audits', 
-      accessor: 'assignments', 
+    {
+      header: 'Assigned Audits',
+      accessor: 'assignments',
       sortable: false,
       cell: (row) => {
         const auditCount = audits.filter(a => a.auditor === row.name).length;
         const badgeLabel = auditCount === 1 ? '1 Audit' : `${auditCount} Audits`;
         return (
-          <button 
-            className="badge badge-completed" 
-            style={{ 
-              border: 'none', 
+          <button
+            className="badge badge-completed"
+            style={{
+              border: 'none',
               cursor: 'pointer',
               fontWeight: '600',
               padding: '6px 12px',
@@ -274,14 +274,14 @@ export default function Auditors() {
                 {getAuditorClients(selectedAuditor.name).map(comp => {
                   const companyAudits = audits.filter(a => a.company === comp && a.auditor === selectedAuditor.name);
                   return (
-                    <div 
-                      key={comp} 
-                      style={{ 
-                        display: 'flex', 
+                    <div
+                      key={comp}
+                      style={{
+                        display: 'flex',
                         flexDirection: 'column',
-                        gap: '4px', 
-                        padding: '12px 14px', 
-                        backgroundColor: 'var(--bg-hover)', 
+                        gap: '4px',
+                        padding: '12px 14px',
+                        backgroundColor: 'var(--bg-hover)',
                         borderRadius: 'var(--radius-md)',
                         border: '1px solid var(--border-color)'
                       }}
@@ -336,9 +336,9 @@ export default function Auditors() {
                 {companies.map(comp => {
                   const alreadyAssigned = getAuditorClients(selectedAuditor.name).includes(comp.name);
                   return (
-                    <option 
-                      key={comp.id} 
-                      value={comp.name} 
+                    <option
+                      key={comp.id}
+                      value={comp.name}
                       disabled={alreadyAssigned}
                     >
                       {comp.name} {alreadyAssigned ? '(Already Assigned)' : ''}
@@ -371,25 +371,25 @@ export default function Auditors() {
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {getAuditorClients(selectedAuditor.name).map(comp => (
-                <div 
-                  key={comp} 
-                  style={{ 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'space-between', 
-                    padding: '10px 14px', 
-                    backgroundColor: 'var(--bg-hover)', 
+                <div
+                  key={comp}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '10px 14px',
+                    backgroundColor: 'var(--bg-hover)',
                     borderRadius: 'var(--radius-md)',
-                    border: '1px solid var(--border-color)' 
+                    border: '1px solid var(--border-color)'
                   }}
                 >
                   <span style={{ fontWeight: '600', fontSize: '13.5px', color: 'var(--text-primary)' }}>{comp}</span>
-                  <button 
-                    className="btn btn-outline" 
-                    style={{ 
-                      padding: '4px 10px', 
-                      fontSize: '12px', 
-                      color: 'var(--primary)', 
+                  <button
+                    className="btn btn-outline"
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: '12px',
+                      color: 'var(--primary)',
                       borderColor: 'var(--primary)',
                       display: 'flex',
                       alignItems: 'center',
