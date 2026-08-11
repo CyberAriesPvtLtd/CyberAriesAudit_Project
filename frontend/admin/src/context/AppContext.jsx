@@ -25,6 +25,7 @@ const initialAudits = [
 ];
 
 import { initialFrameworkRules } from '../data/frameworkRulesData';
+import { generateInitialAuditControls } from '../data/auditControlsData';
 
 const initialRulebook = initialFrameworkRules;
 
@@ -50,6 +51,21 @@ export const AppProvider = ({ children }) => {
   const [audits, setAudits] = useState(() => {
     const saved = localStorage.getItem('cyberaries_audits');
     return saved ? JSON.parse(saved) : initialAudits;
+  });
+
+  const [auditControls, setAuditControls] = useState(() => {
+    const saved = localStorage.getItem('cyberaries_audit_controls');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return generateInitialAuditControls(initialAudits);
   });
 
   const [rulebook, setRulebook] = useState(() => {
@@ -201,6 +217,10 @@ export const AppProvider = ({ children }) => {
   useEffect(() => {
     localStorage.setItem('cyberaries_audits', JSON.stringify(audits));
   }, [audits]);
+
+  useEffect(() => {
+    localStorage.setItem('cyberaries_audit_controls', JSON.stringify(auditControls));
+  }, [auditControls]);
 
   useEffect(() => {
     localStorage.setItem('cyberaries_rulebook', JSON.stringify(rulebook));
@@ -392,7 +412,7 @@ export const AppProvider = ({ children }) => {
   const loginAdmin = async (username, password) => {
     try {
       const response = await api.login(username, password);
-      
+
       const userData = {
         ...response.user,
         token: response.access_token,
@@ -403,7 +423,7 @@ export const AppProvider = ({ children }) => {
       localStorage.setItem('cyberaries_user', JSON.stringify(userData));
       localStorage.setItem('cyberaries_token', response.access_token);
       logActivity(userData.name, 'Security', 'User logged in successfully via Backend API.');
-      
+
       return { success: true, mustChangePassword: response.must_change_password };
     } catch (err) {
       console.error('[CyberAries] Login failed:', err.response?.data?.detail || err.message);
@@ -490,6 +510,96 @@ export const AppProvider = ({ children }) => {
     logActivity(currentUser?.fullName || 'Admin', 'Auditor', `Removed company ${companyName} from auditor ${auditorName}`);
   };
 
+  const getAuditControls = (auditId) => {
+    if (auditControls[auditId] && Array.isArray(auditControls[auditId]) && auditControls[auditId].length > 0) {
+      return auditControls[auditId];
+    }
+    const audit = audits.find(a => a.id === auditId);
+    const rulebook = audit ? audit.rulebook : 'SEBI CSCRF';
+    const auditor = audit ? audit.auditor : 'Dr. Evelyn Foster';
+    
+    return generateInitialAuditControls(audits)[auditId] || generateInitialAuditControls([{ id: auditId, rulebook, auditor }])[auditId] || [];
+  };
+
+  const assignControlsToAuditor = (auditId, controlIds, auditorName) => {
+    setAuditControls(prev => {
+      const currentList = getAuditControls(auditId);
+      const updatedList = currentList.map(ctrl => {
+        if (controlIds.includes(ctrl.id) || controlIds.includes(ctrl.controlId)) {
+          return {
+            ...ctrl,
+            assignedAuditor: auditorName,
+            status: (!auditorName || auditorName === 'Unassigned') ? 'Unassigned' : 'Assigned'
+          };
+        }
+        return ctrl;
+      });
+      return { ...prev, [auditId]: updatedList };
+    });
+
+    logActivity(
+      currentUser?.fullName || 'Admin',
+      'Audit Control',
+      `Assigned ${controlIds.length} control(s) in audit ${auditId} to auditor ${auditorName}`
+    );
+  };
+
+  const reassignControlAuditor = (auditId, controlId, newAuditorName) => {
+    assignControlsToAuditor(auditId, [controlId], newAuditorName);
+  };
+
+  const getAuditControlMetrics = (auditId) => {
+    const list = getAuditControls(auditId);
+    const total = list.length;
+    const assigned = list.filter(c => c.status === 'Assigned' && c.assignedAuditor && c.assignedAuditor !== 'Unassigned').length;
+    const unassigned = total - assigned;
+
+    const auditorSet = new Set(
+      list
+        .filter(c => c.status === 'Assigned' && c.assignedAuditor && c.assignedAuditor !== 'Unassigned')
+        .map(c => c.assignedAuditor)
+    );
+    const auditorsCount = auditorSet.size;
+    const assignedAuditorsList = Array.from(auditorSet);
+    const progressPct = total > 0 ? Math.round((assigned / total) * 100) : 0;
+
+    let assignmentStatus = 'Unassigned';
+    if (unassigned === 0 && total > 0) {
+      assignmentStatus = 'Fully Assigned';
+    } else if (assigned > 0 && unassigned > 0) {
+      assignmentStatus = 'Partially Assigned';
+    }
+
+    return {
+      total,
+      assigned,
+      unassigned,
+      auditorsCount,
+      assignedAuditorsList,
+      progressPct,
+      assignmentStatus
+    };
+  };
+
+  const getAuditorControlAssignments = (auditorName) => {
+    const results = [];
+    audits.forEach(audit => {
+      const controls = getAuditControls(audit.id);
+      const assignedToThisAuditor = controls.filter(c => c.assignedAuditor === auditorName);
+      if (assignedToThisAuditor.length > 0 || audit.auditor === auditorName) {
+        results.push({
+          auditId: audit.id,
+          auditName: audit.auditName || `${audit.rulebook} Assessment`,
+          company: audit.company,
+          framework: audit.rulebook,
+          assignedControlsCount: assignedToThisAuditor.length,
+          controls: assignedToThisAuditor
+        });
+      }
+    });
+    return results;
+  };
+
   return (
     <AppContext.Provider value={{
       currentUser,
@@ -497,6 +607,7 @@ export const AppProvider = ({ children }) => {
       clients,
       auditors,
       audits,
+      auditControls,
       rulebook,
       activities,
       settings,
@@ -519,7 +630,12 @@ export const AppProvider = ({ children }) => {
       updateAudit,
       deleteAudit,
       updateCompany,
-      fetchDataFromBackend
+      fetchDataFromBackend,
+      getAuditControls,
+      assignControlsToAuditor,
+      reassignControlAuditor,
+      getAuditControlMetrics,
+      getAuditorControlAssignments
     }}>
       {children}
     </AppContext.Provider>

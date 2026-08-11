@@ -1,8 +1,10 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import ExcelTable from '../components/ExcelTable';
 import Modal from '../components/Modal';
-import { ClipboardList, Edit, Trash2, UserPlus, Eye, Users } from 'lucide-react';
+import AuditDetailsPage from '../components/AuditDetailsPage';
+import { ClipboardList, Edit, Trash2, UserPlus, Eye, Users, X, ChevronDown, Search } from 'lucide-react';
 
 const FRAMEWORKS = [
   'ISO 27001',
@@ -16,7 +18,65 @@ const FRAMEWORKS = [
   'Custom Audit'
 ];
 
+const AUDIT_CATEGORIES = [
+  'Governance & Risk Management',
+  'Asset Management',
+  'Access Control & Identity',
+  'Data Security & Cryptography',
+  'Continuous Monitoring',
+  'Incident Management',
+  'Data Protection & Backup'
+];
+
+const AUDIT_SUBCATEGORIES_MAP = {
+  'Governance & Risk Management': [
+    'Cybersecurity Policy & Strategy',
+    'Vendor Risk Assessment',
+    'Board Oversight & Compliance',
+    'Risk Management Framework'
+  ],
+  'Asset Management': [
+    'Hardware & Software Catalog',
+    'Real-time Asset Classification',
+    'Media Handling & Destruction'
+  ],
+  'Access Control & Identity': [
+    'Multi-Factor Authentication',
+    'Privileged Identity Management',
+    'User Access Provisioning',
+    'Least Privilege Enforcements'
+  ],
+  'Data Security & Cryptography': [
+    'AES-256 & TLS 1.3 Protocol Enforcements',
+    'Key Management & Rotation',
+    'Data Masking & Privacy'
+  ],
+  'Continuous Monitoring': [
+    'Security Operations & Event Aggregation',
+    'SIEM Telemetry & Logging',
+    'Vulnerability Scanning'
+  ],
+  'Incident Management': [
+    'Response Plan & Breach Notification',
+    'Forensic Isolation & Containment',
+    'Incident Escalation'
+  ],
+  'Data Protection & Backup': [
+    'Immutable Vaults & Recovery Testing',
+    'Disaster Recovery Plan',
+    'Backup Retention & Archiving'
+  ]
+};
+
+const TARGET_FYS = [
+  'FY 2024-25',
+  'FY 2025-26',
+  'FY 2026-27',
+  'FY 2027-28'
+];
+
 export default function AuditManagement() {
+  const navigate = useNavigate();
   const { 
     audits, 
     companies, 
@@ -34,20 +94,40 @@ export default function AuditManagement() {
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
 
   const [selectedAudit, setSelectedAudit] = useState(null);
+  const [activeAuditDetails, setActiveAuditDetails] = useState(null);
 
   // Form states
   const [createForm, setCreateForm] = useState({
     auditName: '',
     company: '',
-    client: '',
-    auditor: '',
-    rulebook: FRAMEWORKS[0],
-    phase: 'Scope & Setup',
-    priority: 'Medium',
-    startDate: new Date().toISOString().split('T')[0],
-    dueDate: '',
-    description: ''
+    auditors: [],
+    framework: '',
+    category: '',
+    subcategory: '',
+    targetFY: ''
   });
+
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
+  const [companySearchQuery, setCompanySearchQuery] = useState('');
+  const [isAuditorsDropdownOpen, setIsAuditorsDropdownOpen] = useState(false);
+
+  const handleToggleAuditor = (auditorName) => {
+    setCreateForm(prev => {
+      const exists = prev.auditors.includes(auditorName);
+      const updated = exists
+        ? prev.auditors.filter(a => a !== auditorName)
+        : [...prev.auditors, auditorName];
+      return { ...prev, auditors: updated };
+    });
+  };
+
+  const handleRemoveAuditor = (auditorName, e) => {
+    e.stopPropagation();
+    setCreateForm(prev => ({
+      ...prev,
+      auditors: prev.auditors.filter(a => a !== auditorName)
+    }));
+  };
 
   const [editForm, setEditForm] = useState({
     id: '',
@@ -155,44 +235,45 @@ export default function AuditManagement() {
   ];
 
   const tableActions = [
+    { label: 'View Audit', onClick: (row) => navigate(`/audits/${row.id}`) },
     { label: 'Edit Audit', onClick: (row) => handleOpenEdit(row) },
+    { label: 'Manage Controls', onClick: (row) => navigate(`/audits/${row.id}`) },
     { label: 'Reassign Client', onClick: (row) => handleOpenReassignClient(row) },
     { label: 'Reassign Auditor', onClick: (row) => handleOpenReassignAuditor(row) },
-    { label: 'View Details', onClick: (row) => handleOpenViewDetails(row) },
+    { label: 'View Specifications', onClick: (row) => handleOpenViewDetails(row) },
     { label: 'Delete', onClick: (row) => handleDeleteAudit(row) },
   ];
 
   const handleCreateSubmit = (e) => {
     e.preventDefault();
-    if (!createForm.company || !createForm.client || !createForm.auditor || !createForm.dueDate || !createForm.auditName) {
-      alert('Audit Name, Company, Representative, Auditor and Target Due Date are required.');
-      return;
-    }
     const newAudit = {
-      company: createForm.company,
-      client: createForm.client,
-      auditor: createForm.auditor,
-      rulebook: createForm.rulebook,
-      auditName: createForm.auditName,
-      phase: createForm.phase,
-      priority: createForm.priority,
-      startDate: createForm.startDate,
-      dueDate: createForm.dueDate,
-      description: createForm.description
+      company: createForm.company || 'Selected Company',
+      client: 'Representative',
+      auditor: createForm.auditors.length > 0 ? createForm.auditors.join(', ') : 'Unassigned Auditor',
+      rulebook: createForm.framework || FRAMEWORKS[0],
+      auditName: createForm.auditName || 'New Compliance Audit',
+      category: createForm.category,
+      subcategory: createForm.subcategory,
+      targetFY: createForm.targetFY,
+      phase: 'Scope & Setup',
+      priority: 'Medium',
+      startDate: new Date().toISOString().split('T')[0],
+      dueDate: '2026-12-31',
+      description: 'Standard compliance assessment.'
     };
     addAudit(newAudit);
     setCreateForm({
       auditName: '',
       company: '',
-      client: '',
-      auditor: '',
-      rulebook: FRAMEWORKS[0],
-      phase: 'Scope & Setup',
-      priority: 'Medium',
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: '',
-      description: ''
+      auditors: [],
+      framework: '',
+      category: '',
+      subcategory: '',
+      targetFY: ''
     });
+    setCompanySearchQuery('');
+    setIsCompanyDropdownOpen(false);
+    setIsAuditorsDropdownOpen(false);
     setIsCreateModalOpen(false);
   };
 
@@ -224,6 +305,18 @@ export default function AuditManagement() {
   const filteredClients = clients.filter(c => c.company === createForm.company);
   const editFilteredClients = clients.filter(c => c.company === editForm.company);
 
+  const availableCompanies = companies.length > 0
+    ? companies.map(c => c.name)
+    : ['Aether Technologies', 'Apex Financial Services', 'BioHealth Solutions', 'Nova Logistics Corp', 'Quantum Retail'];
+
+  const filteredCompaniesList = availableCompanies.filter(c =>
+    c.toLowerCase().includes(companySearchQuery.toLowerCase())
+  );
+
+  const availableAuditorsList = auditors.length > 0
+    ? auditors.map(a => a.name)
+    : ['Dr. Evelyn Foster', 'Christian Wolff', 'Lisbeth Salander'];
+
   return (
     <div className="page-container">
       <div className="page-header">
@@ -243,176 +336,209 @@ export default function AuditManagement() {
         searchKeys={['id', 'company', 'client', 'auditor', 'rulebook']}
         filterOptions={filterOptions}
         actions={tableActions}
+        onRowClick={(row) => navigate(`/audits/${row.id}`)}
         tableName="Audits_Registry_Grid"
       />
 
       {/* CREATE AUDIT MODAL */}
       <Modal isOpen={isCreateModalOpen} onClose={() => setIsCreateModalOpen(false)} title="Create New Compliance Audit">
         <form onSubmit={handleCreateSubmit}>
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Audit Name</label>
-              <input
-                type="text"
-                className="form-input"
-                placeholder="e.g. Q3 SOC 2 Audit"
-                value={createForm.auditName}
-                onChange={(e) => setCreateForm({ ...createForm, auditName: e.target.value })}
-                required
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Audit ID (Auto-Generated)</label>
-              <input
-                type="text"
-                className="form-input"
-                value={`AUDIT-${100 + audits.length + 1}`}
-                disabled
-              />
-            </div>
+          {/* 1. Audit Name */}
+          <div className="form-group">
+            <label className="form-label">Audit Name</label>
+            <input
+              type="text"
+              className="form-input"
+              placeholder="Enter Audit Name"
+              value={createForm.auditName}
+              onChange={(e) => setCreateForm({ ...createForm, auditName: e.target.value })}
+            />
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Client Company</label>
-              <select
-                className="form-input"
-                value={createForm.company}
-                onChange={(e) => setCreateForm({ ...createForm, company: e.target.value, client: '' })}
-                required
-              >
-                <option value="">Select target company</option>
-                {companies.map(comp => (
-                  <option key={comp.id} value={comp.name}>{comp.name}</option>
-                ))}
-              </select>
+          {/* 2. Company Name - Searchable Dropdown */}
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label className="form-label">Company Name</label>
+            <div
+              className="multi-select-box"
+              onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
+              style={{ justifyContent: 'space-between' }}
+            >
+              {createForm.company ? (
+                <span style={{ fontSize: '15px', color: 'var(--text-primary)', fontWeight: '500' }}>
+                  {createForm.company}
+                </span>
+              ) : (
+                <span style={{ fontSize: '15px', color: '#94A3B8' }}>Select Company</span>
+              )}
+              <ChevronDown size={18} style={{ color: 'var(--text-secondary)' }} />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Client Representative</label>
-              <select
-                className="form-input"
-                value={createForm.client}
-                onChange={(e) => setCreateForm({ ...createForm, client: e.target.value })}
-                required
-                disabled={!createForm.company}
-              >
-                <option value="">Select representative</option>
-                {createForm.company ? (
-                  filteredClients.map(c => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
+            {isCompanyDropdownOpen && (
+              <div className="multi-select-dropdown-menu" style={{ padding: '8px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', padding: '6px 10px', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', marginBottom: '6px', backgroundColor: '#F8FAFC' }}>
+                  <Search size={14} style={{ color: 'var(--text-secondary)' }} />
+                  <input
+                    type="text"
+                    placeholder="Search company..."
+                    value={companySearchQuery}
+                    onChange={(e) => setCompanySearchQuery(e.target.value)}
+                    onClick={(e) => e.stopPropagation()}
+                    style={{ border: 'none', background: 'transparent', outline: 'none', width: '100%', fontSize: '13px', color: 'var(--text-primary)' }}
+                  />
+                </div>
+                {filteredCompaniesList.length > 0 ? (
+                  filteredCompaniesList.map(comp => (
+                    <div
+                      key={comp}
+                      className={`multi-select-option ${createForm.company === comp ? 'selected' : ''}`}
+                      onClick={() => {
+                        setCreateForm({ ...createForm, company: comp });
+                        setIsCompanyDropdownOpen(false);
+                      }}
+                    >
+                      {comp}
+                    </div>
                   ))
                 ) : (
-                  <option disabled>Please select a company first</option>
+                  <div style={{ padding: '8px 12px', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    No companies found
+                  </div>
                 )}
-              </select>
-            </div>
+              </div>
+            )}
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Assigned Lead Auditor</label>
-              <select
-                className="form-input"
-                value={createForm.auditor}
-                onChange={(e) => setCreateForm({ ...createForm, auditor: e.target.value })}
-                required
-              >
-                <option value="">Select lead auditor</option>
-                {auditors.filter(a => a.status === 'Active').map(aud => (
-                  <option key={aud.id} value={aud.name}>{aud.name}</option>
-                ))}
-              </select>
+          {/* 3. Auditors Assigned - Multi-Select Dropdown with Chips */}
+          <div className="form-group" style={{ position: 'relative' }}>
+            <label className="form-label">Auditors Assigned</label>
+            <div
+              className={`multi-select-box ${isAuditorsDropdownOpen ? 'focused' : ''}`}
+              onClick={() => setIsAuditorsDropdownOpen(!isAuditorsDropdownOpen)}
+              style={{ justifyContent: 'space-between', cursor: 'pointer' }}
+            >
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', alignItems: 'center', flex: 1 }}>
+                {createForm.auditors.length > 0 ? (
+                  createForm.auditors.map(aud => (
+                    <span key={aud} className="chip-tag">
+                      {aud}
+                      <button
+                        type="button"
+                        className="chip-remove-btn"
+                        onClick={(e) => handleRemoveAuditor(aud, e)}
+                      >
+                        <X size={12} />
+                      </button>
+                    </span>
+                  ))
+                ) : (
+                  <span style={{ fontSize: '15px', color: '#94A3B8' }}>Select Auditors</span>
+                )}
+              </div>
+              <ChevronDown size={18} style={{ color: 'var(--text-secondary)' }} />
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Audit Framework Standard</label>
-              <select
-                className="form-input"
-                value={createForm.rulebook}
-                onChange={(e) => setCreateForm({ ...createForm, rulebook: e.target.value })}
-                required
-              >
-                {FRAMEWORKS.map(f => (
-                  <option key={f} value={f}>{f}</option>
-                ))}
-              </select>
-            </div>
+            {isAuditorsDropdownOpen && (
+              <div className="multi-select-dropdown-menu">
+                {availableAuditorsList.map(aud => {
+                  const isSelected = createForm.auditors.includes(aud);
+                  return (
+                    <div
+                      key={aud}
+                      className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                      onClick={() => handleToggleAuditor(aud)}
+                    >
+                      <span>{aud}</span>
+                      {isSelected && <span style={{ fontSize: '12px', fontWeight: '700' }}>✓</span>}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Audit Phase</label>
-              <select
-                className="form-input"
-                value={createForm.phase}
-                onChange={(e) => setCreateForm({ ...createForm, phase: e.target.value })}
-                required
-              >
-                <option value="Scope & Setup">Scope & Setup</option>
-                <option value="Evidence Gathering">Evidence Gathering</option>
-                <option value="Auditor Review">Auditor Review</option>
-                <option value="Draft Report">Draft Report</option>
-                <option value="Certification">Certification</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Priority</label>
-              <select
-                className="form-input"
-                value={createForm.priority}
-                onChange={(e) => setCreateForm({ ...createForm, priority: e.target.value })}
-                required
-              >
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
-              </select>
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Start Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={createForm.startDate}
-                onChange={(e) => setCreateForm({ ...createForm, startDate: e.target.value })}
-                required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Target Due Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={createForm.dueDate}
-                onChange={(e) => setCreateForm({ ...createForm, dueDate: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
+          {/* 4. Audit Framework */}
           <div className="form-group">
-            <label className="form-label">Description / Scope Details</label>
-            <textarea
+            <label className="form-label">Audit Framework</label>
+            <select
               className="form-input"
-              rows="3"
-              placeholder="Scope guidelines, excluded operations, specific standard requirements..."
-              value={createForm.description}
-              onChange={(e) => setCreateForm({ ...createForm, description: e.target.value })}
-            ></textarea>
+              value={createForm.framework}
+              onChange={(e) => setCreateForm({ ...createForm, framework: e.target.value })}
+            >
+              <option value="">Select Audit Framework</option>
+              {FRAMEWORKS.map(f => (
+                <option key={f} value={f}>{f}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 5. Audit Category */}
+          <div className="form-group">
+            <label className="form-label">Audit Category</label>
+            <select
+              className="form-input"
+              value={createForm.category}
+              onChange={(e) => setCreateForm({
+                ...createForm,
+                category: e.target.value,
+                subcategory: ''
+              })}
+            >
+              <option value="">Select Audit Category</option>
+              {AUDIT_CATEGORIES.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* 6. Audit Subcategory */}
+          <div className="form-group">
+            <label className="form-label">Audit Subcategory</label>
+            <select
+              className="form-input"
+              value={createForm.subcategory}
+              onChange={(e) => setCreateForm({ ...createForm, subcategory: e.target.value })}
+              disabled={!createForm.category}
+            >
+              <option value="">Select Audit Subcategory</option>
+              {createForm.category && AUDIT_SUBCATEGORIES_MAP[createForm.category] ? (
+                AUDIT_SUBCATEGORIES_MAP[createForm.category].map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))
+              ) : (
+                <option disabled>Please select an Audit Category first</option>
+              )}
+            </select>
+          </div>
+
+          {/* 7. Target FY */}
+          <div className="form-group">
+            <label className="form-label">Target FY</label>
+            <select
+              className="form-input"
+              value={createForm.targetFY}
+              onChange={(e) => setCreateForm({ ...createForm, targetFY: e.target.value })}
+            >
+              <option value="">Select Financial Year</option>
+              {TARGET_FYS.map(fy => (
+                <option key={fy} value={fy}>{fy}</option>
+              ))}
+            </select>
           </div>
 
           <div className="modal-footer" style={{ margin: '24px -24px -24px -24px' }}>
-            <button type="button" className="btn btn-secondary" onClick={() => setIsCreateModalOpen(false)}>
+            <button
+              type="button"
+              className="btn btn-secondary"
+              onClick={() => {
+                setIsCreateModalOpen(false);
+                setIsCompanyDropdownOpen(false);
+                setIsAuditorsDropdownOpen(false);
+              }}
+            >
               Cancel
             </button>
             <button type="submit" className="btn btn-primary">
-              <ClipboardList size={16} /> Schedule Audit
+              Create Audit
             </button>
           </div>
         </form>
