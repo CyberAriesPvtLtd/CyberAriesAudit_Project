@@ -33,41 +33,33 @@ def add_control(
 
 @router.get("/", response_model=list[ControlsResponse])
 def fetch_controls(
-    db: Session = Depends(get_db)
+    audit_type: str | None = None,
+    audit_category: str | None = None,
+    audit_subcategory: str | None = None,
+    db: Session = Depends(get_db),
 ):
-    return get_all_controls(db)
+    return get_all_controls(db, audit_type, audit_category, audit_subcategory)
 
 
-@router.get("/{control_id}", response_model=ControlsResponse)
-def fetch_control(
-    control_id: str,
-    db: Session = Depends(get_db)
-):
-    return get_control_by_id(
-        db,
-        control_id
-    )
-
-
-@router.put("/{control_id}", response_model=ControlsResponse)
+@router.put("/{id}", response_model=ControlsResponse)
 def edit_control(
-    control_id: str,
+    id: str,
     control: ControlsUpdate,
     db: Session = Depends(get_db)
 ):
     return update_control(
         db,
-        control_id,
+        id,
         control
     )
 
 
-@router.delete("/{control_id}")
+@router.delete("/{id}")
 def remove_control(
-    control_id: str,
+    id: str,
     db: Session = Depends(get_db)
 ):
     return delete_control(
         db,
-        control_id
+        id
     )

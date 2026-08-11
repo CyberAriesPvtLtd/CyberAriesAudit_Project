@@ -25,7 +25,7 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     company_id = Column(
-        String, ForeignKey("company.id"), nullable=True
+        String, ForeignKey("company.id"), nullable=True, index=True
     )
 
     @property

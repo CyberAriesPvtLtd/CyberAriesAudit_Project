@@ -16,8 +16,8 @@ class EvidenceFiles(Base):
     ai_notes = Column(String,nullable=True)
     auditor_notes = Column(String,nullable=True)
     status = Column(String,nullable=False)
-    uploaded_by = Column(String,ForeignKey("user.id"),nullable=False)
-    audit_control_id = Column(String,ForeignKey("audit_control.id"),nullable=False)
+    uploaded_by = Column(String,ForeignKey("user.id"),nullable=False,index=True)
+    audit_control_id = Column(String,ForeignKey("audit_control.id"),nullable=False,index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
