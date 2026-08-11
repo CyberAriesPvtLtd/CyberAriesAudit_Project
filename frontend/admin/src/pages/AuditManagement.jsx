@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import ExcelTable from '../components/ExcelTable';
 import Modal from '../components/Modal';
+import AuditDetailsPage from '../components/AuditDetailsPage';
 import { ClipboardList, Edit, Trash2, UserPlus, Eye, Users, X, ChevronDown, Search } from 'lucide-react';
 
 const FRAMEWORKS = [
@@ -74,6 +76,7 @@ const TARGET_FYS = [
 ];
 
 export default function AuditManagement() {
+  const navigate = useNavigate();
   const { 
     audits, 
     companies, 
@@ -91,6 +94,7 @@ export default function AuditManagement() {
   const [isViewDetailsOpen, setIsViewDetailsOpen] = useState(false);
 
   const [selectedAudit, setSelectedAudit] = useState(null);
+  const [activeAuditDetails, setActiveAuditDetails] = useState(null);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -124,7 +128,6 @@ export default function AuditManagement() {
       auditors: prev.auditors.filter(a => a !== auditorName)
     }));
   };
-
 
   const [editForm, setEditForm] = useState({
     id: '',
@@ -232,10 +235,12 @@ export default function AuditManagement() {
   ];
 
   const tableActions = [
+    { label: 'View Audit', onClick: (row) => navigate(`/audits/${row.id}`) },
     { label: 'Edit Audit', onClick: (row) => handleOpenEdit(row) },
+    { label: 'Manage Controls', onClick: (row) => navigate(`/audits/${row.id}`) },
     { label: 'Reassign Client', onClick: (row) => handleOpenReassignClient(row) },
     { label: 'Reassign Auditor', onClick: (row) => handleOpenReassignAuditor(row) },
-    { label: 'View Details', onClick: (row) => handleOpenViewDetails(row) },
+    { label: 'View Specifications', onClick: (row) => handleOpenViewDetails(row) },
     { label: 'Delete', onClick: (row) => handleDeleteAudit(row) },
   ];
 
@@ -331,6 +336,7 @@ export default function AuditManagement() {
         searchKeys={['id', 'company', 'client', 'auditor', 'rulebook']}
         filterOptions={filterOptions}
         actions={tableActions}
+        onRowClick={(row) => navigate(`/audits/${row.id}`)}
         tableName="Audits_Registry_Grid"
       />
 

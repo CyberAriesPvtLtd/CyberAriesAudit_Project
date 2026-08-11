@@ -13,6 +13,7 @@ import Companies from './pages/Companies';
 import Clients from './pages/Clients';
 import Auditors from './pages/Auditors';
 import AuditManagement from './pages/AuditManagement';
+import AuditDetailsPage from './components/AuditDetailsPage';
 import Rulebook from './pages/Rulebook';
 import Reports from './pages/Reports';
 import SystemActivity from './pages/SystemActivity';
@@ -132,6 +133,22 @@ function AppRoutes() {
         element={
           <AppLayout>
             <AuditManagement />
+          </AppLayout>
+        } 
+      />
+      <Route 
+        path="/audits/:auditId" 
+        element={
+          <AppLayout>
+            <AuditDetailsPage />
+          </AppLayout>
+        } 
+      />
+      <Route 
+        path="/audit-management/:auditId" 
+        element={
+          <AppLayout>
+            <AuditDetailsPage />
           </AppLayout>
         } 
       />
