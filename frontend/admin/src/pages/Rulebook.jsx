@@ -15,7 +15,12 @@ import {
   Info
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { formatDateDDMMYYYY } from '../data/frameworkRulesData';
+import { 
+  formatDateDDMMYYYY, 
+  CONTROL_DOMAINS, 
+  FRAMEWORK_TYPES, 
+  FRAMEWORK_CATEGORIES 
+} from '../data/frameworkRulesData';
 
 export default function Rulebook() {
   const { rulebook, uploadFramework } = useApp();
@@ -235,12 +240,8 @@ export default function Rulebook() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', maxWidth: '160px', overflow: 'hidden' }}>
         <span
           className={`compact-doc-chip ${isPrimary ? 'primary-chip' : 'secondary-chip'}`}
-          title="Click to view documents"
-          onClick={(e) => {
-            e.stopPropagation();
-            setViewingDocumentsRow(row);
-          }}
-          style={{ maxWidth: '110px', flexShrink: 1, cursor: 'pointer' }}
+          title={firstDoc}
+          style={{ maxWidth: '110px', flexShrink: 1 }}
         >
           <FileText size={11} style={{ flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstDoc}</span>
@@ -273,39 +274,21 @@ export default function Rulebook() {
       sortable: true,
       width: '210px',
       cell: (row) => {
-        const rulesList = row.frameworkRulesList || [];
-        const fallbackText = row.frameworkRules || '';
+        const fullText = row.frameworkRules || '';
+        const parts = fullText.split(':');
+        const code = parts[0]?.trim();
+        const name = parts.length > 1 ? parts.slice(1).join(':').trim() : fullText;
 
-        // If we have a parsed array from the backend, render as vertical pill list
-        if (rulesList.length > 0) {
-          return (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '195px' }}>
-              {rulesList.map((rule, idx) => (
-                <span key={idx} style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  padding: '2px 8px',
-                  borderRadius: '4px',
-                  fontSize: '12px',
-                  fontWeight: '600',
-                  fontFamily: 'monospace',
-                  backgroundColor: '#F0F4FF',
-                  color: '#1A3A6B',
-                  border: '1px solid #C7D7F0',
-                  whiteSpace: 'nowrap',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  maxWidth: '190px'
-                }} title={rule}>
-                  {rule}
-                </span>
-              ))}
-            </div>
-          );
-        }
-
-        // No rules available
-        return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>;
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '195px', overflow: 'hidden' }}>
+            <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {code}
+            </span>
+            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>
+              {name}
+            </span>
+          </div>
+        );
       }
     },
     {
@@ -413,29 +396,23 @@ export default function Rulebook() {
   ];
 
   // ----------------------------------------------------
-  // SEARCH & FILTERS (Dynamically generated from actual data)
+  // SEARCH & FILTERS
   // ----------------------------------------------------
-  
-  // Extract unique values from the current rulebook data for the dropdowns
-  const uniqueFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))].sort();
-  const uniqueControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))].sort();
-  const uniqueFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))].sort();
-
   const filterOptions = [
     {
       label: 'Framework Type',
       key: 'frameworkType',
-      options: uniqueFrameworkTypes
+      options: FRAMEWORK_TYPES
     },
     {
       label: 'Control Domain',
       key: 'controlDomain',
-      options: uniqueControlDomains
+      options: CONTROL_DOMAINS
     },
     {
       label: 'Framework Category',
       key: 'frameworkCategory',
-      options: uniqueFrameworkCategories
+      options: FRAMEWORK_CATEGORIES
     }
   ];
 

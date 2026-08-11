@@ -24,7 +24,9 @@ const initialAudits = [
   { id: 'AUDIT-113', company: 'BioHealth Solutions', client: 'Jane Goodall', auditor: 'Christian Wolff', rulebook: 'ISO 27001', status: 'In Progress', progress: 30, dueDate: '2026-10-30' },
 ];
 
+import { initialFrameworkRules } from '../data/frameworkRulesData';
 
+const initialRulebook = initialFrameworkRules;
 
 const initialActivities = [
   { id: 'ACT-001', user: 'System', type: 'System', message: 'Automated compliance score recalculation completed successfully.', timestamp: '2026-07-09T14:45:00Z' },
@@ -50,7 +52,20 @@ export const AppProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : initialAudits;
   });
 
-  const [rulebook, setRulebook] = useState([]);
+  const [rulebook, setRulebook] = useState(() => {
+    const saved = localStorage.getItem('cyberaries_rulebook');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].frameworkRules) {
+          return parsed;
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    return initialFrameworkRules;
+  });
 
   const [activities, setActivities] = useState(() => {
     const saved = localStorage.getItem('cyberaries_activities');
@@ -126,26 +141,6 @@ export const AppProvider = ({ children }) => {
     createdDate: dbUser.created_at ? new Date(dbUser.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
   });
 
-  // ─── Helper: Map backend control response to frontend rulebook shape ───
-  const mapControlFromDb = (dbControl) => {
-    const rules = dbControl.framework_rules || [];
-    return {
-      id: dbControl.id,
-      frameworkRules: rules.join(', '),
-      frameworkRulesList: rules,
-      controlDomain: dbControl.control_domain || '',
-      frameworkType: dbControl.audit_type,
-      frameworkCategory: dbControl.audit_category,
-      frameworkSubcategory: dbControl.audit_subcategory,
-      description: dbControl.control_desc,
-      primaryDocuments: dbControl.primary_evidence || [],
-      secondaryDocuments: dbControl.secondary_evidence || [],
-      lastUpdated: dbControl.created_at
-        ? new Date(dbControl.created_at).toLocaleDateString('en-GB').split('/').join('-')
-        : '',
-    };
-  };
-
   // ─── Fetch Companies & Users from Backend on Mount ────────────
   const fetchDataFromBackend = useCallback(async () => {
     try {
@@ -180,14 +175,6 @@ export const AppProvider = ({ children }) => {
       }
 
       console.log('[CyberAries] Backend connected — data loaded from PostgreSQL.');
-
-      // Fetch controls / rulebook
-      const dbControls = await api.getControls();
-      if (dbControls && dbControls.length > 0) {
-        const mappedControls = dbControls.map(mapControlFromDb);
-        setRulebook(mappedControls);
-        console.log(`[CyberAries] Loaded ${mappedControls.length} controls from backend.`);
-      }
     } catch (err) {
       setBackendConnected(false);
       console.warn('[CyberAries] Backend unreachable — using local/dummy data.', err.message);
