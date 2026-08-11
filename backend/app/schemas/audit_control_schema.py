@@ -1,6 +1,7 @@
 from pydantic import BaseModel
 from datetime import datetime
 from typing import Optional
+from app.schemas.controls_schema import ControlsResponse
 
 
 class AuditControlCreate(BaseModel):
@@ -31,6 +32,7 @@ class AuditControlResponse(BaseModel):
     framework_id: str
     control_id: str
     created_at: datetime
+    control: Optional[ControlsResponse] = None
 
     class Config:
         from_attributes = True

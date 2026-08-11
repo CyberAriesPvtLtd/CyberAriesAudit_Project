@@ -14,6 +14,7 @@ from app.services.audit_control_service import (
     create_audit_control,
     get_all_audit_controls,
     get_audit_control_by_id,
+    get_audit_controls_by_framework,
     update_audit_control,
     delete_audit_control,
 )
@@ -37,6 +38,14 @@ def fetch_audit_controls(
     db: Session = Depends(get_db)
 ):
     return get_all_audit_controls(db)
+
+
+@router.get("/framework/{framework_id}", response_model=list[AuditControlResponse])
+def fetch_audit_controls_by_framework(
+    framework_id: str,
+    db: Session = Depends(get_db)
+):
+    return get_audit_controls_by_framework(db, framework_id)
 
 
 @router.get("/{audit_control_id}", response_model=AuditControlResponse)

@@ -21,7 +21,8 @@ class AuditFramework(Base):
     company_id = Column(
         String,
         ForeignKey("company.id"),
-        nullable=False
+        nullable=False,
+        index=True
     )
     assigned_auditors = Column(ARRAY(String), default=list)
 
