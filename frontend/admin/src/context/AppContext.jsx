@@ -145,6 +145,26 @@ export const AppProvider = ({ children }) => {
     };
   };
 
+  // ─── Helper: Map backend control response to frontend rulebook shape ───
+  const mapControlFromDb = (dbControl) => {
+    const rules = dbControl.framework_rules || [];
+    return {
+      id: dbControl.id,
+      frameworkRules: rules.join(', '),
+      frameworkRulesList: rules,
+      controlDomain: dbControl.control_domain || '',
+      frameworkType: dbControl.audit_type,
+      frameworkCategory: dbControl.audit_category,
+      frameworkSubcategory: dbControl.audit_subcategory,
+      description: dbControl.control_desc,
+      primaryDocuments: dbControl.primary_evidence || [],
+      secondaryDocuments: dbControl.secondary_evidence || [],
+      lastUpdated: dbControl.created_at
+        ? new Date(dbControl.created_at).toLocaleDateString('en-GB').split('/').join('-')
+        : '',
+    };
+  };
+
   // ─── Helper: Map backend user response to frontend auditor shape ───
   const mapUserToAuditor = (dbUser) => ({
     id: dbUser.id,
@@ -191,6 +211,15 @@ export const AppProvider = ({ children }) => {
       }
 
       console.log('[CyberAries] Backend connected — data loaded from PostgreSQL.');
+
+      // Fetch controls / rulebook
+      const dbControls = await api.getControls();
+      if (dbControls && dbControls.length > 0) {
+        const mappedControls = dbControls.map(mapControlFromDb);
+        setRulebook(mappedControls);
+        console.log(`[CyberAries] Loaded ${mappedControls.length} controls from backend.`);
+      }
+
     } catch (err) {
       setBackendConnected(false);
       console.warn('[CyberAries] Backend unreachable — using local/dummy data.', err.message);

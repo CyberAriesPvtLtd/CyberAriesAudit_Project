@@ -109,6 +109,51 @@ export const deleteUser = async (id) => {
   return data;
 };
 
+// ─── Controls Endpoints ───────────────────────────────────────────
+
+export const getControls = async () => {
+  const { data } = await axiosClient.get('/controls/');
+  return data;
+};
+
+export const createControl = async (controlData) => {
+  const { data } = await axiosClient.post('/controls/', controlData);
+  return data;
+};
+// ─── Audit Framework Endpoints ────────────────────────────────────
+
+export const getAuditFrameworks = async () => {
+  const { data } = await axiosClient.get('/audit-framework/');
+  return data;
+};
+
+export const getAuditFrameworkById = async (id) => {
+  const { data } = await axiosClient.get(`/audit-framework/${id}`);
+  return data;
+};
+
+export const createAuditFramework = async (frameworkData) => {
+  const { data } = await axiosClient.post('/audit-framework/', frameworkData);
+  return data;
+};
+
+export const updateAuditFramework = async (id, updates) => {
+  const { data } = await axiosClient.put(`/audit-framework/${id}`, updates);
+  return data;
+};
+
+export const deleteAuditFramework = async (id) => {
+  const { data } = await axiosClient.delete(`/audit-framework/${id}`);
+  return data;
+};
+
+// ─── Audit Control Endpoints ──────────────────────────────────────
+
+export const getAuditControlsByFramework = async (frameworkId) => {
+  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
+  return data;
+};
+
 // Default export for convenience
 const api = {
   testDbConnection,
@@ -125,6 +170,14 @@ const api = {
   deleteUser,
   login,
   changePassword,
+  getControls,
+  createControl,
+  getAuditFrameworks,
+  getAuditFrameworkById,
+  createAuditFramework,
+  updateAuditFramework,
+  deleteAuditFramework,
+  getAuditControlsByFramework,
 };
 
 export default api;

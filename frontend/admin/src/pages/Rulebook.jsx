@@ -240,8 +240,12 @@ export default function Rulebook() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', maxWidth: '160px', overflow: 'hidden' }}>
         <span
           className={`compact-doc-chip ${isPrimary ? 'primary-chip' : 'secondary-chip'}`}
-          title={firstDoc}
-          style={{ maxWidth: '110px', flexShrink: 1 }}
+          title="Click to view documents"
+          onClick={(e) => {
+            e.stopPropagation();
+            setViewingDocumentsRow(row);
+          }}
+          style={{ maxWidth: '110px', flexShrink: 1, cursor: 'pointer' }}
         >
           <FileText size={11} style={{ flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstDoc}</span>
@@ -274,19 +278,36 @@ export default function Rulebook() {
       sortable: true,
       width: '210px',
       cell: (row) => {
-        const fullText = row.frameworkRules || '';
-        const parts = fullText.split(':');
-        const code = parts[0]?.trim();
-        const name = parts.length > 1 ? parts.slice(1).join(':').trim() : fullText;
+        const rulesArray = row.frameworkRulesList || [];
+        
+        if (rulesArray.length === 0) {
+          return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>;
+        }
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '195px', overflow: 'hidden' }}>
-            <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {code}
-            </span>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>
-              {name}
-            </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '195px' }}>
+            {rulesArray.map((rule, idx) => (
+              <span 
+                key={idx} 
+                title={rule}
+                style={{ 
+                  backgroundColor: 'var(--bg-secondary)',
+                  border: '1px solid var(--border-color)',
+                  color: 'var(--text-primary)',
+                  padding: '2px 6px',
+                  borderRadius: '4px',
+                  fontSize: '12px',
+                  fontFamily: 'monospace',
+                  fontWeight: '600',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'inline-block'
+                }}
+              >
+                {rule}
+              </span>
+            ))}
           </div>
         );
       }
@@ -396,23 +417,27 @@ export default function Rulebook() {
   ];
 
   // ----------------------------------------------------
-  // SEARCH & FILTERS
+  // SEARCH & FILTERS (Dynamic)
   // ----------------------------------------------------
+  const dynamicFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))];
+  const dynamicControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))];
+  const dynamicFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))];
+
   const filterOptions = [
     {
       label: 'Framework Type',
       key: 'frameworkType',
-      options: FRAMEWORK_TYPES
+      options: dynamicFrameworkTypes.length > 0 ? dynamicFrameworkTypes : FRAMEWORK_TYPES
     },
     {
       label: 'Control Domain',
       key: 'controlDomain',
-      options: CONTROL_DOMAINS
+      options: dynamicControlDomains.length > 0 ? dynamicControlDomains : CONTROL_DOMAINS
     },
     {
       label: 'Framework Category',
       key: 'frameworkCategory',
-      options: FRAMEWORK_CATEGORIES
+      options: dynamicFrameworkCategories.length > 0 ? dynamicFrameworkCategories : FRAMEWORK_CATEGORIES
     }
   ];
 
