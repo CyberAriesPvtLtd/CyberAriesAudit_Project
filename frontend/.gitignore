@@ -1,0 +1,17 @@
+# Dependencies and cache
+**/node_modules/
+**/.vite/
+
+# Production build outputs
+**/dist/
+
+# Local environment variables
+**/.env
+**/.env.*
+
+# Editor and OS settings
+.vscode/
+.idea/
+.DS_Store
+*.suo
+*.log
