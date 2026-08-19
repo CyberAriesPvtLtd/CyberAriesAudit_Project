@@ -7,3 +7,4 @@ docker-compose.*.yaml
 # Ignore the README file
 README.md
 readme.md
+.gitignore

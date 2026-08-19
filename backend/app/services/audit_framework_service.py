@@ -3,29 +3,17 @@ from sqlalchemy.orm import Session
 
 from app.models.audit_framework import AuditFramework
 from app.models.company import Company
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
 from app.models.controls import Controls
 from app.models.audit_control import AuditControl
 from app.models.controls_evidence_type import ControlsEvidenceType
 from app.models.evidence_files import EvidenceItem
 from app.services.evidence_files_service import _link_evidence_to_control
->>>>>>> Stashed changes
-=======
-from app.models.controls import Controls
-from app.models.audit_control import AuditControl
->>>>>>> main-demo
 
 
 def create_audit_framework(db: Session, audit_data):
 
     company = db.query(Company).filter(
-<<<<<<< HEAD
-        Company.id == audit_data.companyID
-=======
         Company.id == audit_data.company_id
->>>>>>> main-demo
     ).first()
 
     if not company:
@@ -41,23 +29,14 @@ def create_audit_framework(db: Session, audit_data):
         audit_name=audit_data.audit_name,
         target_fy=audit_data.target_fy,
         status=audit_data.status,
-<<<<<<< HEAD
-        companyID=audit_data.companyID
-=======
         company_id=audit_data.company_id,
         assigned_auditors=audit_data.assigned_auditors
->>>>>>> main-demo
     )
 
     db.add(audit_framework)
     db.commit()
     db.refresh(audit_framework)
 
-<<<<<<< HEAD
-<<<<<<< Updated upstream
-=======
-=======
->>>>>>> main-demo
     matching_controls = (
         db.query(Controls)
         .filter(
@@ -68,10 +47,7 @@ def create_audit_framework(db: Session, audit_data):
         .all()
     )
 
-<<<<<<< HEAD
     new_audit_controls = []
-=======
->>>>>>> main-demo
     for control in matching_controls:
         audit_control = AuditControl(
             framework_id=audit_framework.id,
@@ -83,7 +59,6 @@ def create_audit_framework(db: Session, audit_data):
         )
 
         db.add(audit_control)
-<<<<<<< HEAD
         new_audit_controls.append((audit_control, control))
 
     db.commit()
@@ -119,12 +94,6 @@ def create_audit_framework(db: Session, audit_data):
 
     db.commit()
 
->>>>>>> Stashed changes
-=======
-
-    db.commit()
-
->>>>>>> main-demo
     return audit_framework
 
 
@@ -165,11 +134,7 @@ def update_audit_framework(
 
     update_dict = audit_data.model_dump(exclude_unset=True)
 
-<<<<<<< HEAD
-    for key,value in update_dict.items():
-=======
     for key, value in update_dict.items():
->>>>>>> main-demo
         setattr(audit_framework, key, value)
 
     db.commit()
