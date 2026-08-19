@@ -43,10 +43,6 @@ with SessionLocal() as db:
     else:
         print("[CyberAries] Controls table already populated. Skipping auto-seed.")
 
-
-# Make sure the MinIO bucket for evidence files exists before accepting uploads
-ensure_bucket_exists()
-
 # Make sure the MinIO bucket for evidence files exists before accepting uploads
 ensure_bucket_exists()
 

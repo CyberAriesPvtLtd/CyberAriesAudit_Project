@@ -339,7 +339,14 @@ export const ClientProvider = ({ children }) => {
         }
         return c;
       });
+<<<<<<< HEAD
       return { ...prev, [currentAudit]: updatedList };
+=======
+      return {
+        ...prev,
+        [currentAudit]: updatedList
+      };
+>>>>>>> main-demo
     });
 
     if (fileName) {

@@ -6,6 +6,7 @@ from app.database import Base
 from app.utils.nanoid import generate_evidence_file_id
 
 
+<<<<<<< HEAD
 class EvidenceItem(Base):
     """
     One physical file the company has on record. Owned by the company, not
@@ -17,6 +18,11 @@ class EvidenceItem(Base):
     __tablename__ = "evidence_files"
 
 <<<<<<< Updated upstream
+=======
+class EvidenceFiles(Base):
+    __tablename__ = "evidence_files"
+
+>>>>>>> main-demo
     id = Column(String,primary_key=True,default=generate_evidence_file_id)
     file_name = Column(String,nullable=False)
     file_url = Column(String,nullable=False)
@@ -24,6 +30,7 @@ class EvidenceItem(Base):
     ai_notes = Column(String,nullable=True)
     auditor_notes = Column(String,nullable=True)
     status = Column(String,nullable=False)
+<<<<<<< HEAD
     uploaded_by = Column(String,ForeignKey("user.id"),nullable=False)
     audit_control_id = Column(String,ForeignKey("audit_control.id"),nullable=False)
 =======
@@ -60,3 +67,12 @@ class EvidenceItem(Base):
 # EvidenceFiles` import fails loudly at startup instead of silently, making
 # it easy to grep and fix rather than a runtime surprise.
 EvidenceFiles = EvidenceItem
+=======
+    uploaded_by = Column(String,ForeignKey("user.id"),nullable=False,index=True)
+    audit_control_id = Column(String,ForeignKey("audit_control.id"),nullable=False,index=True)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # Relationships
+    user = relationship("User",back_populates="uploaded_evidence_files")
+    audit_control = relationship("AuditControl",back_populates="evidence_files")
+>>>>>>> main-demo
