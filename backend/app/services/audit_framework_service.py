@@ -3,6 +3,14 @@ from sqlalchemy.orm import Session
 
 from app.models.audit_framework import AuditFramework
 from app.models.company import Company
+<<<<<<< Updated upstream
+=======
+from app.models.controls import Controls
+from app.models.audit_control import AuditControl
+from app.models.controls_evidence_type import ControlsEvidenceType
+from app.models.evidence_files import EvidenceItem
+from app.services.evidence_files_service import _link_evidence_to_control
+>>>>>>> Stashed changes
 
 
 def create_audit_framework(db: Session, audit_data):
@@ -31,6 +39,66 @@ def create_audit_framework(db: Session, audit_data):
     db.commit()
     db.refresh(audit_framework)
 
+<<<<<<< Updated upstream
+=======
+    matching_controls = (
+        db.query(Controls)
+        .filter(
+            Controls.audit_type == audit_framework.audit_type,
+            Controls.audit_category == audit_framework.audit_category,
+            Controls.audit_subcategory == audit_framework.audit_subcategory
+        )
+        .all()
+    )
+
+    new_audit_controls = []
+    for control in matching_controls:
+        audit_control = AuditControl(
+            framework_id=audit_framework.id,
+            control_id=control.id,
+            status="Pending",
+            assigned_to=None,
+            auditor_notes=None,
+            evaluated_at=None
+        )
+
+        db.add(audit_control)
+        new_audit_controls.append((audit_control, control))
+
+    db.commit()
+
+    # Pre-link existing evidence: if this company already has evidence on
+    # file that satisfies one of this new audit's controls (via a shared
+    # EvidenceType), attach it immediately - so a newly started audit can
+    # show some requirements already met from day one, instead of asking
+    # the client to re-upload something they submitted for another audit.
+    for audit_control, control in new_audit_controls:
+        required_type_ids = [
+            row.evidence_type_id for row in
+            db.query(ControlsEvidenceType)
+            .filter(ControlsEvidenceType.control_id == control.id)
+            .all()
+        ]
+        if not required_type_ids:
+            continue
+
+        existing_evidence = (
+            db.query(EvidenceItem)
+            .filter(
+                EvidenceItem.company_id == audit_data.company_id,
+                EvidenceItem.evidence_type_id.in_(required_type_ids),
+            )
+            .all()
+        )
+        for evidence in existing_evidence:
+            _link_evidence_to_control(
+                db, evidence.id, audit_control.id,
+                linked_by_type="auto", linked_by_user=None,
+            )
+
+    db.commit()
+
+>>>>>>> Stashed changes
     return audit_framework
 
 

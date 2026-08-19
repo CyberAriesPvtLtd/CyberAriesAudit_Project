@@ -38,7 +38,7 @@ class Controls(Base):
     create_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     audit_controls = relationship("AuditControl", back_populates="control")
-
+    evidence_type_links = relationship("ControlsEvidenceType", back_populates="control")
     # Convenience for display / exports. Read-only — never write through these.
     @property
     def primary_evidence_text(self) -> str:

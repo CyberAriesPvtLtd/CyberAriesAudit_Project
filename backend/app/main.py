@@ -5,6 +5,7 @@ from sqlalchemy import text
 from app.database import Base, engine, SessionLocal
 from app.utils.seed import seed_default_admin
 from app.utils.seed_controls import seed_controls
+from app.services.storage_service import ensure_bucket_exists
 
 # Import Models
 from app.models import (
@@ -13,7 +14,10 @@ from app.models import (
     AuditFramework,
     Controls,
     AuditControl,
-    EvidenceFiles,
+    EvidenceType,
+    ControlsEvidenceType,
+    EvidenceItem,
+    AuditControlEvidence,
 )
 
 # Import Routers
@@ -38,6 +42,13 @@ with SessionLocal() as db:
         seed_controls(db)
     else:
         print("[CyberAries] Controls table already populated. Skipping auto-seed.")
+
+
+# Make sure the MinIO bucket for evidence files exists before accepting uploads
+ensure_bucket_exists()
+
+# Make sure the MinIO bucket for evidence files exists before accepting uploads
+ensure_bucket_exists()
 
 app = FastAPI(
     title="Aries Audit Backend",

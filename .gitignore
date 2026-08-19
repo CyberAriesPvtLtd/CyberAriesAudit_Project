@@ -1,0 +1,9 @@
+# Ignore all Docker Compose files
+docker-compose.yml
+docker-compose.yaml
+docker-compose.*.yml
+docker-compose.*.yaml
+
+# Ignore the README file
+README.md
+readme.md
