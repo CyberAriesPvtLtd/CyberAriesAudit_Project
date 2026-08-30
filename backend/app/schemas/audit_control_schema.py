@@ -15,6 +15,7 @@ class AuditControlCreate(BaseModel):
 
 class AuditControlUpdate(BaseModel):
     status: str
+    assigned_to: Optional[str] = None
     auditor_notes: Optional[str] = None
     evaluated_at: Optional[datetime] = None
 

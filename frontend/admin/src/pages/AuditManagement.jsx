@@ -57,6 +57,9 @@ export default function AuditManagement() {
   const [selectedAudit, setSelectedAudit] = useState(null);
   const [activeAuditDetails, setActiveAuditDetails] = useState(null);
 
+  const [isEditAuditorsDropdownOpen, setIsEditAuditorsDropdownOpen] = useState(false);
+  const [isCreatingAudit, setIsCreatingAudit] = useState(false);
+
   // Form states
   const [createForm, setCreateForm] = useState({
     auditName: '',
@@ -90,19 +93,32 @@ export default function AuditManagement() {
     }));
   };
 
+  const handleToggleEditAuditor = (auditorName) => {
+    setEditForm(prev => {
+      const updated = prev.auditors.includes(auditorName)
+        ? prev.auditors.filter(a => a !== auditorName)
+        : [...prev.auditors, auditorName];
+      return { ...prev, auditors: updated };
+    });
+  };
+
+  const handleRemoveEditAuditor = (auditorName, e) => {
+    e.stopPropagation();
+    setEditForm(prev => ({
+      ...prev,
+      auditors: prev.auditors.filter(a => a !== auditorName)
+    }));
+  };
+
   const [editForm, setEditForm] = useState({
     id: '',
     auditName: '',
     company: '',
-    client: '',
-    auditor: '',
-    rulebook: '',
-    phase: 'Scope & Setup',
-    priority: 'Medium',
-    startDate: '',
-    dueDate: '',
-    description: '',
-    progress: 0,
+    auditors: [],
+    framework: '',
+    category: '',
+    subcategory: '',
+    targetFY: '',
     status: 'In Progress'
   });
 
@@ -119,17 +135,13 @@ export default function AuditManagement() {
     setSelectedAudit(audit);
     setEditForm({
       id: audit.id,
-      auditName: audit.auditName || `${audit.rulebook} Assessment`,
+      auditName: audit.auditName || `${audit.framework} Assessment`,
       company: audit.company,
-      client: audit.client,
-      auditor: audit.auditor,
-      rulebook: audit.rulebook,
-      phase: audit.phase || (audit.status === 'Completed' ? 'Certification' : audit.status === 'Pending Review' ? 'Auditor Review' : 'Evidence Gathering'),
-      priority: audit.priority || 'Medium',
-      startDate: audit.startDate || '2026-07-01',
-      dueDate: audit.dueDate,
-      description: audit.description || 'Standard compliance assessment.',
-      progress: audit.progress || 0,
+      auditors: audit.auditors || [],
+      framework: audit.framework,
+      category: audit.category,
+      subcategory: audit.subcategory,
+      targetFY: audit.targetFY,
       status: audit.status || 'In Progress'
     });
     setIsEditModalOpen(true);
@@ -217,8 +229,9 @@ export default function AuditManagement() {
     { label: 'Delete', onClick: (row) => handleDeleteAudit(row) },
   ];
 
-  const handleCreateSubmit = (e) => {
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
+    setIsCreatingAudit(true);
     const newAudit = {
       company: createForm.company,
       framework: createForm.framework,
@@ -229,7 +242,8 @@ export default function AuditManagement() {
       targetFY: createForm.targetFY,
       status: 'Pending'
     };
-    addAudit(newAudit);
+    await addAudit(newAudit);
+    
     setCreateForm({
       auditName: '',
       company: '',
@@ -242,12 +256,15 @@ export default function AuditManagement() {
     setCompanySearchQuery('');
     setIsCompanyDropdownOpen(false);
     setIsAuditorsDropdownOpen(false);
+    setIsCreatingAudit(false);
     setIsCreateModalOpen(false);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    updateAudit(editForm);
+    setIsCreatingAudit(true);
+    await updateAudit(editForm);
+    setIsCreatingAudit(false);
     setIsEditModalOpen(false);
   };
 
@@ -273,17 +290,13 @@ export default function AuditManagement() {
   const filteredClients = clients.filter(c => c.company === createForm.company);
   const editFilteredClients = clients.filter(c => c.company === editForm.company);
 
-  const availableCompanies = companies.length > 0
-    ? companies.map(c => c.name)
-    : ['Aether Technologies', 'Apex Financial Services', 'BioHealth Solutions', 'Nova Logistics Corp', 'Quantum Retail'];
+  const availableCompanies = companies.map(c => c.name);
 
   const filteredCompaniesList = availableCompanies.filter(c =>
     c.toLowerCase().includes(companySearchQuery.toLowerCase())
   );
 
-  const availableAuditorsList = auditors.length > 0
-    ? auditors.map(a => a.name)
-    : ['Dr. Evelyn Foster', 'Christian Wolff', 'Lisbeth Salander'];
+  const availableAuditorsList = auditors.map(a => a.name);
 
   return (
     <div className="page-container">
@@ -505,8 +518,8 @@ export default function AuditManagement() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Create Audit
+            <button type="submit" className="btn btn-primary" disabled={isCreatingAudit}>
+              {isCreatingAudit ? 'Creating...' : 'Create Audit'}
             </button>
           </div>
         </form>
@@ -537,140 +550,142 @@ export default function AuditManagement() {
             </div>
           </div>
 
+          {/* 1. Audit Name & FY */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Audit Name</label>
+              <input
+                type="text"
+                className="form-input"
+                value={editForm.auditName}
+                onChange={(e) => setEditForm({ ...editForm, auditName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Target FY</label>
+              <select
+                className="form-input"
+                value={editForm.targetFY}
+                onChange={(e) => setEditForm({ ...editForm, targetFY: e.target.value })}
+                required
+              >
+                <option value="">Select Target FY</option>
+                {TARGET_FYS.map(fy => (
+                  <option key={fy} value={fy}>{fy}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 2. Company & Auditors */}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Client Company</label>
               <select
                 className="form-input"
                 value={editForm.company}
-                onChange={(e) => setEditForm({ ...editForm, company: e.target.value, client: '' })}
+                onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
                 required
               >
+                <option value="">Select Company</option>
                 {companies.map(comp => (
                   <option key={comp.id} value={comp.name}>{comp.name}</option>
                 ))}
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Client Representative</label>
-              <select
-                className="form-input"
-                value={editForm.client}
-                onChange={(e) => setEditForm({ ...editForm, client: e.target.value })}
-                required
-                disabled={!editForm.company}
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label className="form-label">Assigned Auditors</label>
+              <div 
+                className="form-input multi-select-display"
+                onClick={() => setIsEditAuditorsDropdownOpen(!isEditAuditorsDropdownOpen)}
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <option value="">Select representative</option>
-                {editForm.company ? (
-                  editFilteredClients.map(c => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))
-                ) : (
-                  <option disabled>Please select a company first</option>
-                )}
-              </select>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', flex: 1 }}>
+                  {editForm.auditors.length > 0 ? (
+                    editForm.auditors.map(auditor => (
+                      <span key={auditor} className="chip-tag" style={{ backgroundColor: 'var(--primary)', color: 'white', border: 'none' }}>
+                        {auditor}
+                        <button type="button" onClick={(e) => handleRemoveEditAuditor(auditor, e)} style={{ border: 'none', background: 'transparent', color: 'white', marginLeft: '4px', cursor: 'pointer' }}>×</button>
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: '15px', color: '#94A3B8' }}>Select Auditors</span>
+                  )}
+                </div>
+                <ChevronDown size={18} style={{ color: 'var(--text-secondary)' }} />
+              </div>
+
+              {isEditAuditorsDropdownOpen && (
+                <div className="multi-select-dropdown-menu">
+                  {availableAuditorsList.map(aud => {
+                    const isSelected = editForm.auditors.includes(aud);
+                    return (
+                      <div
+                        key={aud}
+                        className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                        onClick={() => handleToggleEditAuditor(aud)}
+                      >
+                        <span>{aud}</span>
+                        {isSelected && <span style={{ fontSize: '12px', fontWeight: '700' }}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
+          {/* 3. Framework & Category */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Lead Auditor</label>
+              <label className="form-label">Audit Framework</label>
               <select
                 className="form-input"
-                value={editForm.auditor}
-                onChange={(e) => setEditForm({ ...editForm, auditor: e.target.value })}
+                value={editForm.framework}
+                onChange={(e) => setEditForm({ ...editForm, framework: e.target.value })}
                 required
               >
-                {auditors.map(aud => (
-                  <option key={aud.id} value={aud.name}>{aud.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Framework</label>
-              <select
-                className="form-input"
-                value={editForm.rulebook}
-                onChange={(e) => setEditForm({ ...editForm, rulebook: e.target.value })}
-                required
-              >
+                <option value="">Select Framework</option>
                 {FRAMEWORKS.map(f => (
                   <option key={f} value={f}>{f}</option>
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="form-row">
+            
             <div className="form-group">
-              <label className="form-label">Phase</label>
+              <label className="form-label">Audit Category</label>
               <select
                 className="form-input"
-                value={editForm.phase}
-                onChange={(e) => setEditForm({ ...editForm, phase: e.target.value })}
+                value={editForm.category}
+                onChange={(e) => setEditForm({ ...editForm, category: e.target.value, subcategory: '' })}
                 required
               >
-                <option value="Scope & Setup">Scope & Setup</option>
-                <option value="Evidence Gathering">Evidence Gathering</option>
-                <option value="Auditor Review">Auditor Review</option>
-                <option value="Draft Report">Draft Report</option>
-                <option value="Certification">Certification</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Priority</label>
-              <select
-                className="form-input"
-                value={editForm.priority}
-                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
-                required
-              >
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
+                <option value="">Select Category</option>
+                {AUDIT_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
           </div>
 
+          {/* 4. Subcategory & Status */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Start Date</label>
-              <input
-                type="date"
+              <label className="form-label">Audit Subcategory</label>
+              <select
                 className="form-input"
-                value={editForm.startDate}
-                onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                value={editForm.subcategory}
+                onChange={(e) => setEditForm({ ...editForm, subcategory: e.target.value })}
                 required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Target Due Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={editForm.dueDate}
-                onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Progress (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                className="form-input"
-                value={editForm.progress}
-                onChange={(e) => setEditForm({ ...editForm, progress: parseInt(e.target.value) || 0 })}
-                required
-              />
+                disabled={!editForm.category}
+              >
+                <option value="">Select Subcategory</option>
+                {editForm.category && AUDIT_SUBCATEGORIES_MAP[editForm.category]?.map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">
@@ -681,6 +696,7 @@ export default function AuditManagement() {
                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                 required
               >
+                <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
                 <option value="Pending Review">Pending Review</option>
                 <option value="Completed">Completed</option>
@@ -688,22 +704,12 @@ export default function AuditManagement() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Scope Description</label>
-            <textarea
-              className="form-input"
-              rows="3"
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            ></textarea>
-          </div>
-
           <div className="modal-footer" style={{ margin: '24px -24px -24px -24px' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setIsEditModalOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              <Edit size={16} /> Save Changes
+            <button type="submit" className="btn btn-primary" disabled={isCreatingAudit}>
+              <Edit size={16} /> {isCreatingAudit ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

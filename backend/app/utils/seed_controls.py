@@ -7,17 +7,21 @@ evidence text contains commas of its own and cannot be reliably re-split from a
 delimited string.
 
 Idempotent: re-running updates existing rows in place and inserts only what is
-new. Rows are matched on (control_code, audit_type, audit_category,
-audit_subcategory). That match is done in Python - the database enforces
-uniqueness on `id` only.
+new. Rows are matched on control_id.
+
+Pointer Indexing: When the same SEBI clause (e.g. GV.PO.S1) appears on
+multiple rows (each being a separate "pointer" / implementation step), the
+control_id gets a suffix: GV.PO.S1-1, GV.PO.S1-2, etc. This suffix is
+applied to EVERY row for consistency, even if a clause appears only once.
 
 Usage:
-    python -m app.utils.seed_controls              # load both sheets
+    python -m app.utils.seed_controls              # load all sheets
     python -m app.utils.seed_controls --dry-run    # parse and report, no writes
 """
 
 import argparse
 import re
+from collections import defaultdict
 from pathlib import Path
 
 import openpyxl
@@ -33,19 +37,97 @@ from app.models.controls import Controls
 
 CONTROLS_DIR = Path(__file__).resolve().parents[1] / "data" / "controls"
 
-# We no longer hardcode files. The script will automatically scan all .xlsx files
 
-# Map database fields to possible Excel column headers (case-insensitive)
-COLUMNS = {
-    "framework_rules": ["sebi clause/standard code", "iso clause", "standard code"],
-    "control_domain": ["control domain"],
-    "control_desc": ["control description"],
-    "primary_evidence": ["primary (mandatory) evidence"],
-    "secondary_evidence": ["secondary (supporting) evidence"],
-    "audit_type": ["audit_framework", "audit_framwork"],
-    "audit_category": ["audit_category"],
-    "audit_subcategory": ["audit_subcategory"],
+# --------------------------------------------------------------------------
+# Column Alias Dictionary
+# Maps each schema field → all known Excel header variations.
+# All comparisons are done on normalized (lowercase, alphanum only) strings.
+# --------------------------------------------------------------------------
+
+COLUMN_ALIASES = {
+    "framework_rules": [
+        "sebiclausestandardcode", "sebiclaustandardcode", "sebiclause",
+        "standardcode", "frameworkrules", "frameworkrule", "rule",
+        "controlname", "clausestandardcode",
+    ],
+    "control_domain": ["controldomain", "domain"],
+    "control_desc": ["controldescription", "description", "controldesc"],
+    "audit_type": [
+        "auditframwork", "auditframework", "auditfrawmork",
+        "framework", "frameworktype",
+    ],
+    "audit_category": ["auditcategory", "category", "frameworkcategory"],
+    "audit_subcategory": [
+        "auditsubcategory", "subcategory", "frameworksubcategory",
+    ],
+    "primary_evidence": [
+        "primarymandatoryevidence", "primaryevidence",
+        "primarydocuments", "mandatoryevidence",
+    ],
+    "secondary_evidence": [
+        "secondarysupportingevidence", "secondaryevidence",
+        "secondarydocuments", "supportingevidence",
+    ],
 }
+
+
+# --------------------------------------------------------------------------
+# Canonical Value Dictionary
+# Maps normalized cell values → the single canonical string stored in the DB.
+# Handles typos + casing differences across different Excel files.
+# --------------------------------------------------------------------------
+
+CANONICAL_VALUES = {
+    "audit_type": {
+        "cscrf": "CSCRF",
+        "sebicscrf": "CSCRF",
+        "sebi": "CSCRF",
+    },
+    "audit_category": {
+        "aif": "AIF",
+        "alternativeinvestmentfund": "AIF",
+        "pms": "PMS",
+        "portfoliomanagementservice": "PMS",
+        "portfoliomanagementservices": "PMS",
+        "stockbroker": "Stock Broker",
+        "stockbrokers": "Stock Broker",
+        "depository": "Depository",
+        "mf": "Mutual Fund",
+        "mutualfund": "Mutual Fund",
+    },
+    "audit_subcategory": {
+        "selfcertified": "Self-Certified",
+        "selfcertifiedre": "Self-Certified",
+        "selfcert": "Self-Certified",
+        "mediumsize": "Medium-Size",
+        "mediumsizere": "Medium-Size",
+        "medium": "Medium-Size",
+        "midsize": "Medium-Size",
+        "qualifiedre": "Qualified",
+        "qualified": "Qualified",
+        "smallsizere": "Small-Size",
+        "smallsize": "Small-Size",
+        "small": "Small-Size",
+    },
+    "control_domain": {
+        "governance": "Governance",
+        "govern": "Governance",
+        "gv": "Governance",
+        "identify": "Identify",
+        "id": "Identify",
+        "protect": "Protect",
+        "pr": "Protect",
+        "detect": "Detect",
+        "de": "Detect",
+        "respond": "Respond",
+        "rs": "Respond",
+        "recover": "Recover",
+        "rc": "Recover",
+        "evolve": "Evolve",
+        "ev": "Evolve",
+    },
+}
+
 
 # Fields refreshed on an existing row when the sheet changes.
 UPDATABLE_FIELDS = (
@@ -56,15 +138,39 @@ UPDATABLE_FIELDS = (
     "secondary_evidence",
 )
 
-# The source sheets separate multiple evidence items with ";" or a newline.
-# Commas are NOT separators — they occur inside individual evidence items.
+
+# --------------------------------------------------------------------------
+# Normalization helpers
+# --------------------------------------------------------------------------
+
+def _normalize_key(s: str) -> str:
+    """Lowercase + strip all non-alphanumeric chars."""
+    return re.sub(r"[^a-z0-9]", "", str(s or "").lower())
+
+
+def canonicalize(field: str, raw_value) -> str | None:
+    """
+    Given a raw cell value and a field name, return the canonical value
+    if a match exists. If no canonical match, return the raw value trimmed.
+    """
+    if raw_value is None:
+        return None
+    norm = _normalize_key(raw_value)
+    mapping = CANONICAL_VALUES.get(field, {})
+    if norm in mapping:
+        return mapping[norm]
+    return str(raw_value).strip()
+
+
+# --------------------------------------------------------------------------
+# Parsing helpers
+# --------------------------------------------------------------------------
+
+# Evidence is split on ";" or newlines. Commas are NOT separators — they
+# occur inside individual evidence items.
 _SPLIT_RE = re.compile(r"[;\n]+")
 _SPLIT_SEBI_RE = re.compile(r"[,;\n]+")
 
-
-# --------------------------------------------------------------------------
-# Parsing
-# --------------------------------------------------------------------------
 
 def clean_text(value):
     """Collapse runs of spaces/tabs, strip, return None for empties."""
@@ -78,9 +184,6 @@ def split_evidence(value):
     """
     Split a multi-item evidence cell into a list, dropping blanks and
     case-insensitive duplicates while preserving sheet order.
-
-        "Board Resolution; Defined roles, responsibilities"
-        -> ["Board Resolution", "Defined roles, responsibilities"]
     """
     if value is None:
         return []
@@ -100,9 +203,7 @@ def split_evidence(value):
 
 
 def split_framework_rules(value):
-    """
-    Split framework rules by comma, semicolon, or newline.
-    """
+    """Split framework rules by comma, semicolon, or newline."""
     if value is None:
         return []
     items, seen = [], set()
@@ -118,72 +219,127 @@ def split_framework_rules(value):
     return items
 
 
+def build_column_resolver(header_row):
+    """
+    Build a resolver map: field_name → column index.
+    Uses the COLUMN_ALIASES dictionary with normalized header matching.
+    """
+    # Normalize all headers
+    normalized = []
+    for i, cell in enumerate(header_row):
+        text = clean_text(cell)
+        if text:
+            normalized.append((i, _normalize_key(text)))
+        else:
+            normalized.append((i, ""))
+
+    resolver = {}
+    for field, aliases in COLUMN_ALIASES.items():
+        for alias in aliases:
+            for col_idx, norm_header in normalized:
+                if norm_header == alias:
+                    resolver[field] = col_idx
+                    break
+            if field in resolver:
+                break
+
+    return resolver
+
+
+# --------------------------------------------------------------------------
+# Parsing
+# --------------------------------------------------------------------------
+
 def parse_workbook(path: Path):
     """Return a list of control dicts from one workbook."""
     worksheet = openpyxl.load_workbook(path, data_only=True).active
 
     header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True))
-    header = [clean_text(cell).lower() for cell in header_row if clean_text(cell)]
 
-    index = {}
-    for field, possibilities in COLUMNS.items():
-        found = False
-        for title in possibilities:
-            if title in header:
-                index[field] = header.index(title)
-                found = True
-                break
-        if not found:
-            raise ValueError(
-                f"{path.name}: expected column for '{field}' but found {header}"
-            )
+    # Build column resolver using normalized aliases
+    resolver = build_column_resolver(header_row)
 
-    controls = []
+    # Verify all required fields are resolved
+    required = [
+        "framework_rules", "control_domain", "control_desc",
+        "audit_type", "audit_category", "audit_subcategory",
+        "primary_evidence", "secondary_evidence",
+    ]
+    missing = [f for f in required if f not in resolver]
+    if missing:
+        raw_headers = [clean_text(c) for c in header_row if clean_text(c)]
+        raise ValueError(
+            f"{path.name}: could not resolve columns for {missing}. "
+            f"Found headers: {raw_headers}"
+        )
+
+    def get(row, field):
+        idx = resolver.get(field)
+        if idx is None or idx >= len(row):
+            return None
+        return row[idx]
+
+    # ── First pass: collect all rows and count occurrences of each rule ──
+    raw_rows = []
+    rule_counter = defaultdict(int)  # tracks how many times each base-key appears
+
     for row_number, row in enumerate(
         worksheet.iter_rows(min_row=2, values_only=True), start=2
     ):
-        audit_type = clean_text(row[index["audit_type"]])
-        audit_category = clean_text(row[index["audit_category"]])
-        audit_subcategory = clean_text(row[index["audit_subcategory"]])
-        
-        framework_rules = split_framework_rules(row[index["framework_rules"]])
-        control_desc = clean_text(row[index["control_desc"]])
+        audit_type = canonicalize("audit_type", clean_text(get(row, "audit_type")))
+        audit_category = canonicalize("audit_category", clean_text(get(row, "audit_category")))
+        audit_subcategory = canonicalize("audit_subcategory", clean_text(get(row, "audit_subcategory")))
 
-        # Skip blank spacer rows rather than inserting junk.
+        framework_rules = split_framework_rules(get(row, "framework_rules"))
+        control_desc = clean_text(get(row, "control_desc"))
+
+        # Skip blank spacer rows
         if not framework_rules or not control_desc or not audit_type:
             continue
 
         first_rule = framework_rules[0] if framework_rules else "UNKNOWN"
-        control_id_raw = f"{audit_type}-{audit_category}-{audit_subcategory}-{first_rule}"
-        control_id = control_id_raw.replace(" ", "")
 
-        controls.append(
-            {
-                "audit_type": audit_type,
-                "audit_category": audit_category,
-                "audit_subcategory": audit_subcategory,
-                "control_id": control_id,
-                "framework_rules": framework_rules,
-                "control_domain": clean_text(row[index["control_domain"]]),
-                "control_desc": control_desc,
-                "primary_evidence": split_evidence(row[index["primary_evidence"]]),
-                "secondary_evidence": split_evidence(row[index["secondary_evidence"]]),
-                "_source": f"{path.name}:{row_number}",
-            }
-        )
+        # Base key (without pointer index) for counting
+        base_key = f"{audit_type}-{audit_category}-{audit_subcategory}-{first_rule}".replace(" ", "")
 
-    return controls
+        rule_counter[base_key] += 1
+        pointer_index = rule_counter[base_key]
+
+        control_id = f"{base_key}-{pointer_index}"
+
+        raw_rows.append({
+            "audit_type": audit_type,
+            "audit_category": audit_category,
+            "audit_subcategory": audit_subcategory,
+            "control_id": control_id,
+            "framework_rules": framework_rules,
+            "control_domain": canonicalize("control_domain", clean_text(get(row, "control_domain"))),
+            "control_desc": control_desc,
+            "primary_evidence": split_evidence(get(row, "primary_evidence")),
+            "secondary_evidence": split_evidence(get(row, "secondary_evidence")),
+            "_source": f"{path.name}:{row_number}",
+        })
+
+    return raw_rows
 
 
 def load_all_controls():
-    """Parse every configured workbook and fail on duplicate scoped keys."""
+    """Parse every .xlsx workbook in data/controls and fail on duplicate IDs."""
     parsed, seen = [], {}
 
-    # Read all .xlsx files dynamically except cross reference maps
-    for path in CONTROLS_DIR.glob("*.xlsx"):
+    if not CONTROLS_DIR.exists():
+        print(f"[CyberAries] Controls directory does not exist: {CONTROLS_DIR}")
+        return parsed
+
+    xlsx_files = sorted(CONTROLS_DIR.glob("*.xlsx"))
+    if not xlsx_files:
+        print(f"[CyberAries] No .xlsx files found in {CONTROLS_DIR}")
+        return parsed
+
+    for path in xlsx_files:
         if "CrossReference" in path.name:
             continue
-            
+
         print(f"[CyberAries] Parsing {path.name}...")
 
         for control in parse_workbook(path):
@@ -206,16 +362,16 @@ def load_all_controls():
 def seed_controls(db: Session, dry_run: bool = False):
     parsed = load_all_controls()
 
-    # `id` is the only unique key in the database, so nothing stops duplicate
-    # (code, scope) rows from existing. Match on the scope key anyway - that is
-    # what makes re-seeding idempotent - but surface any duplicates found so a
-    # bad import does not silently persist.
+    if not parsed:
+        print("[CyberAries] No controls to seed.")
+        return {"parsed": 0, "inserted": 0, "updated": 0, "unchanged": 0}
+
     existing, duplicates = {}, []
     for row in db.query(Controls).order_by(Controls.created_at).all():
         key = row.control_id
         if key in existing:
             duplicates.append(key)
-            continue  # keep the oldest, ignore the rest
+            continue
         existing[key] = row
 
     if duplicates:
@@ -242,7 +398,6 @@ def seed_controls(db: Session, dry_run: bool = False):
         for field in UPDATABLE_FIELDS:
             current = getattr(row, field)
             incoming = payload[field]
-            # ARRAY columns come back as list-likes; compare by value.
             if isinstance(incoming, list):
                 if list(current or []) != incoming:
                     changes[field] = incoming
@@ -283,4 +438,4 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     with SessionLocal() as session:
-        seed_controls(session, dry_run=args.dry_run)
+        seed_controls(session, dry_run=args.dry_run)

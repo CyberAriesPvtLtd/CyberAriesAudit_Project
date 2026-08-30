@@ -8,24 +8,9 @@ const initialCompanies = [];
 const initialClients = [];
 const initialAuditors = [];
 
-const initialAudits = [
-  { id: 'AUDIT-101', company: 'Aether Technologies', client: 'Sarah Connor', auditor: 'Dr. Evelyn Foster', rulebook: 'SOC 2 Type II', status: 'In Progress', progress: 68, dueDate: '2026-08-15' },
-  { id: 'AUDIT-102', company: 'Apex Financial Services', client: 'Marcus Aurelius', auditor: 'Christian Wolff', rulebook: 'SOC 2 Type II', status: 'In Progress', progress: 45, dueDate: '2026-09-01' },
-  { id: 'AUDIT-103', company: 'BioHealth Solutions', client: 'Jane Goodall', auditor: 'Christian Wolff', rulebook: 'HIPAA', status: 'Pending Review', progress: 95, dueDate: '2026-07-30' },
-  { id: 'AUDIT-104', company: 'Nova Logistics Corp', client: 'Tony Stark', auditor: 'Lisbeth Salander', rulebook: 'ISO 27001', status: 'Completed', progress: 100, dueDate: '2026-06-30' },
-  { id: 'AUDIT-105', company: 'Quantum Retail', client: 'Bruce Wayne', auditor: 'Christian Wolff', rulebook: 'PCI DSS', status: 'In Progress', progress: 20, dueDate: '2026-10-10' },
-  { id: 'AUDIT-106', company: 'Aether Technologies', client: 'Sarah Connor', auditor: 'Dr. Evelyn Foster', rulebook: 'ISO 27001', status: 'In Progress', progress: 40, dueDate: '2026-09-15' },
-  { id: 'AUDIT-107', company: 'Aether Technologies', client: 'Sarah Connor', auditor: 'Dr. Evelyn Foster', rulebook: 'SEBI CSCRF', status: 'Completed', progress: 100, dueDate: '2026-06-10' },
-  { id: 'AUDIT-108', company: 'Apex Financial Services', client: 'Marcus Aurelius', auditor: 'Christian Wolff', rulebook: 'SEBI CSCRF', status: 'Completed', progress: 100, dueDate: '2026-07-01' },
-  { id: 'AUDIT-109', company: 'Apex Financial Services', client: 'Marcus Aurelius', auditor: 'Christian Wolff', rulebook: 'RBI Cyber Security', status: 'Pending Review', progress: 90, dueDate: '2026-08-20' },
-  { id: 'AUDIT-110', company: 'Nova Logistics Corp', client: 'Tony Stark', auditor: 'Lisbeth Salander', rulebook: 'PCI DSS', status: 'In Progress', progress: 55, dueDate: '2026-11-05' },
-  { id: 'AUDIT-111', company: 'Nova Logistics Corp', client: 'Tony Stark', auditor: 'Lisbeth Salander', rulebook: 'Custom Audit', status: 'In Progress', progress: 10, dueDate: '2026-12-15' },
-  { id: 'AUDIT-112', company: 'Quantum Retail', client: 'Bruce Wayne', auditor: 'Christian Wolff', rulebook: 'HIPAA', status: 'Pending Review', progress: 85, dueDate: '2026-09-25' },
-  { id: 'AUDIT-113', company: 'BioHealth Solutions', client: 'Jane Goodall', auditor: 'Christian Wolff', rulebook: 'ISO 27001', status: 'In Progress', progress: 30, dueDate: '2026-10-30' },
-];
+const initialAudits = [];
 
 import { initialFrameworkRules } from '../data/frameworkRulesData';
-import { generateInitialAuditControls } from '../data/auditControlsData';
 
 const initialRulebook = initialFrameworkRules;
 
@@ -53,20 +38,7 @@ export const AppProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : initialAudits;
   });
 
-  const [auditControls, setAuditControls] = useState(() => {
-    const saved = localStorage.getItem('cyberaries_audit_controls');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (parsed && typeof parsed === 'object' && Object.keys(parsed).length > 0) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return generateInitialAuditControls(initialAudits);
-  });
+  const [auditControls, setAuditControls] = useState({});
 
   const [rulebook, setRulebook] = useState(() => {
     const saved = localStorage.getItem('cyberaries_rulebook');
@@ -177,6 +149,28 @@ export const AppProvider = ({ children }) => {
     createdDate: dbUser.created_at ? new Date(dbUser.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
   });
 
+  // ─── Helper: Map backend audit response to frontend audit shape ───
+  const mapAuditFromDb = (dbAudit, companiesList, auditorsList) => {
+    const company = companiesList.find(c => c.id === dbAudit.companyID) || {};
+    const auditorNames = (dbAudit.assigned_auditors || []).map(id => {
+      const auditor = auditorsList.find(a => a.id === id);
+      return auditor ? auditor.name : null;
+    }).filter(Boolean);
+
+    return {
+      id: dbAudit.id,
+      company: company.name || 'Unknown Company (Deleted)',
+      framework: dbAudit.audit_type,
+      category: dbAudit.audit_category,
+      subcategory: dbAudit.audit_subcategory,
+      auditName: dbAudit.audit_name,
+      auditors: auditorNames,
+      targetFY: dbAudit.target_fy,
+      status: dbAudit.status || 'Pending',
+      createdDate: dbAudit.created_at ? new Date(dbAudit.created_at).toISOString().split('T')[0] : '',
+    };
+  };
+
   // ─── Fetch Companies & Users from Backend on Mount ────────────
   const fetchDataFromBackend = useCallback(async () => {
     try {
@@ -186,14 +180,14 @@ export const AppProvider = ({ children }) => {
 
       // Fetch companies
       const dbCompanies = await api.getCompanies();
-      if (dbCompanies && dbCompanies.length > 0) {
+      if (dbCompanies) {
         const mapped = dbCompanies.map(mapCompanyFromDb);
         setCompanies(mapped);
       }
 
       // Fetch users and split into clients / auditors
       const dbUsers = await api.getUsers();
-      if (dbUsers && dbUsers.length > 0) {
+      if (dbUsers) {
         // We need companies list for name lookup
         const companiesForLookup = dbCompanies && dbCompanies.length > 0
           ? dbCompanies.map(mapCompanyFromDb)
@@ -202,22 +196,33 @@ export const AppProvider = ({ children }) => {
         const dbClients = dbUsers.filter(u => u.role === 'client');
         const dbAuditors = dbUsers.filter(u => u.role === 'auditor');
 
-        if (dbClients.length > 0) {
-          setClients(dbClients.map(u => mapUserToClient(u, companiesForLookup)));
-        }
-        if (dbAuditors.length > 0) {
-          setAuditors(dbAuditors.map(u => mapUserToAuditor(u)));
-        }
+        setClients(dbClients.map(u => mapUserToClient(u, companiesForLookup)));
+        setAuditors(dbAuditors.map(u => mapUserToAuditor(u)));
       }
 
       console.log('[CyberAries] Backend connected — data loaded from PostgreSQL.');
 
       // Fetch controls / rulebook
       const dbControls = await api.getControls();
-      if (dbControls && dbControls.length > 0) {
+      if (dbControls) {
         const mappedControls = dbControls.map(mapControlFromDb);
         setRulebook(mappedControls);
         console.log(`[CyberAries] Loaded ${mappedControls.length} controls from backend.`);
+      }
+
+      // Fetch audits
+      const dbAudits = await api.getAuditFrameworks();
+      if (dbAudits) {
+        // Prepare lookup lists
+        const companiesForLookup = dbCompanies && dbCompanies.length > 0 ? dbCompanies.map(mapCompanyFromDb) : companies;
+        let auditorsForLookup = auditors;
+        if (dbUsers && dbUsers.length > 0) {
+          auditorsForLookup = dbUsers.filter(u => u.role === 'auditor').map(mapUserToAuditor);
+        }
+        
+        const mappedAudits = dbAudits.map(a => mapAuditFromDb(a, companiesForLookup, auditorsForLookup));
+        setAudits(mappedAudits);
+        console.log(`[CyberAries] Loaded ${mappedAudits.length} audits from backend.`);
       }
 
     } catch (err) {
@@ -247,9 +252,7 @@ export const AppProvider = ({ children }) => {
     localStorage.setItem('cyberaries_audits', JSON.stringify(audits));
   }, [audits]);
 
-  useEffect(() => {
-    localStorage.setItem('cyberaries_audit_controls', JSON.stringify(auditControls));
-  }, [auditControls]);
+
 
   useEffect(() => {
     localStorage.setItem('cyberaries_rulebook', JSON.stringify(rulebook));
@@ -350,76 +353,75 @@ export const AppProvider = ({ children }) => {
     }
   };
 
-  const addAudit = (audit) => {
-    const id = `AUDIT-${100 + audits.length + 1}`;
-    const newAudit = {
-      id,
-      progress: 0,
-      status: 'In Progress',
-      ...audit,
-    };
-    setAudits(prev => [...prev, newAudit]);
+  const addAudit = async (auditData) => {
+    try {
+      const company = companies.find(c => c.name === auditData.company);
+      if (!company) throw new Error("Selected company not found in database.");
 
-    // Update companies
-    setCompanies(prev => prev.map(c => {
-      if (c.name === audit.company) {
-        return { ...c, auditsCount: c.auditsCount + 1 };
-      }
-      return c;
-    }));
+      const auditorIds = (auditData.auditors || []).map(name => {
+        const auditor = auditors.find(a => a.name === name);
+        return auditor ? auditor.id : null;
+      }).filter(Boolean);
 
-    // Update auditors
-    setAuditors(prev => prev.map(a => {
-      if (a.name === audit.auditor) {
-        return { ...a, assignments: a.assignments + 1 };
-      }
-      return a;
-    }));
+      const payload = {
+        audit_type: auditData.framework,
+        audit_category: auditData.category,
+        audit_subcategory: auditData.subcategory || '',
+        audit_name: auditData.auditName,
+        target_fy: auditData.targetFY,
+        status: 'Pending',
+        companyID: company.id,
+        assigned_auditors: auditorIds
+      };
 
-    logActivity(currentUser?.fullName || 'Admin', 'Audit', `Created new audit ${id} for ${audit.company}`);
+      const created = await api.createAuditFramework(payload);
+      const mapped = mapAuditFromDb(created, companies, auditors);
+      setAudits(prev => [...prev, mapped]);
+
+      logActivity(currentUser?.fullName || 'Admin', 'Audit', `Created new audit ${mapped.id} for ${auditData.company}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to create audit:', err.response?.data?.detail || err.message);
+      alert(`Failed to create audit: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const updateAudit = (updatedAudit) => {
-    setAudits(prev => prev.map(a => {
-      if (a.id === updatedAudit.id) {
-        return { ...a, ...updatedAudit };
-      }
-      return a;
-    }));
-    logActivity(currentUser?.fullName || 'Admin', 'Audit', `Updated details for audit ${updatedAudit.id}`);
+  const updateAudit = async (auditData) => {
+    try {
+      const auditorIds = (auditData.auditors || []).map(name => {
+        const auditor = auditors.find(a => a.name === name);
+        return auditor ? auditor.id : null;
+      }).filter(Boolean);
+
+      const payload = {
+        audit_type: auditData.framework,
+        audit_category: auditData.category,
+        audit_subcategory: auditData.subcategory || '',
+        audit_name: auditData.auditName,
+        target_fy: auditData.targetFY,
+        status: auditData.status,
+        assigned_auditors: auditorIds
+      };
+
+      const updated = await api.updateAuditFramework(auditData.id, payload);
+      const mapped = mapAuditFromDb(updated, companies, auditors);
+
+      setAudits(prev => prev.map(a => a.id === auditData.id ? mapped : a));
+      logActivity(currentUser?.fullName || 'Admin', 'Audit', `Updated details for audit ${auditData.id}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to update audit:', err.response?.data?.detail || err.message);
+      alert(`Failed to update audit: ${err.response?.data?.detail || err.message}`);
+    }
   };
 
-  const deleteAudit = (auditId) => {
-    let companyName = '';
-    let auditorName = '';
-    setAudits(prev => {
-      const audit = prev.find(a => a.id === auditId);
-      if (audit) {
-        companyName = audit.company;
-        auditorName = audit.auditor;
-      }
-      return prev.filter(a => a.id !== auditId);
-    });
-
-    if (companyName) {
-      setCompanies(prev => prev.map(c => {
-        if (c.name === companyName) {
-          return { ...c, auditsCount: Math.max(0, c.auditsCount - 1) };
-        }
-        return c;
-      }));
+  const deleteAudit = async (auditId) => {
+    try {
+      await api.deleteAuditFramework(auditId);
+      setAudits(prev => prev.filter(a => a.id !== auditId));
+      logActivity(currentUser?.fullName || 'Admin', 'Audit', `Deleted audit ${auditId}`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to delete audit:', err.response?.data?.detail || err.message);
+      alert(`Failed to delete audit: ${err.response?.data?.detail || err.message}`);
     }
-
-    if (auditorName) {
-      setAuditors(prev => prev.map(a => {
-        if (a.name === auditorName) {
-          return { ...a, assignments: Math.max(0, a.assignments - 1) };
-        }
-        return a;
-      }));
-    }
-
-    logActivity(currentUser?.fullName || 'Admin', 'Audit', `Deleted audit ${auditId}`);
   };
 
   const updateSettings = (section, data) => {
@@ -469,13 +471,37 @@ export const AppProvider = ({ children }) => {
     localStorage.removeItem('cyberaries_token');
   };
 
-  const uploadFramework = (newRules) => {
-    const rulesList = Array.isArray(newRules) ? newRules : [newRules];
-    setRulebook(prev => [...rulesList, ...prev]);
-    logActivity(currentUser?.fullName || 'Admin', 'Framework', `Uploaded framework with ${rulesList.length} rules.`);
+  const uploadFramework = async (file) => {
+    try {
+      // Send the Excel file to the backend — it handles parsing, saving,
+      // and seeding into the database in one shot.
+      const result = await api.uploadControlsExcel(file);
+      console.log(`[CyberAries] Upload result:`, result);
+
+      // Refresh all controls from the database
+      await fetchDataFromBackend();
+      logActivity(
+        currentUser?.fullName || 'Admin',
+        'Framework',
+        `Uploaded framework file "${file.name}" — ${result.inserted} inserted, ${result.updated} updated.`
+      );
+      return result;
+    } catch (err) {
+      console.error('[CyberAries] Failed to upload framework file:', err);
+      throw err;
+    }
   };
 
-  const addControl = uploadFramework;
+  const addControl = async (rule) => {
+    try {
+      await api.createControl(rule);
+      await fetchDataFromBackend();
+      logActivity(currentUser?.fullName || 'Admin', 'Framework', `Added new control rule.`);
+    } catch (err) {
+      console.error('[CyberAries] Failed to add control rule:', err);
+      throw err;
+    }
+  };
 
   const assignAuditToClient = (companyName, clientName, frameworkName, auditorName) => {
     const exists = audits.some(a => a.company === companyName && a.rulebook === frameworkName);
@@ -539,38 +565,101 @@ export const AppProvider = ({ children }) => {
     logActivity(currentUser?.fullName || 'Admin', 'Auditor', `Removed company ${companyName} from auditor ${auditorName}`);
   };
 
-  const getAuditControls = (auditId) => {
-    if (auditControls[auditId] && Array.isArray(auditControls[auditId]) && auditControls[auditId].length > 0) {
-      return auditControls[auditId];
+  // ─── Helper: Map backend AuditControlResponse to frontend control shape ───
+  const mapAuditControlFromDb = (ac) => {
+    const ctrl = ac.control || {};
+    let assignedAuditorName = 'Unassigned';
+    if (ac.assigned_to) {
+      const auditor = auditors.find(a => a.id === ac.assigned_to);
+      assignedAuditorName = auditor ? auditor.name : 'Unknown Auditor';
     }
-    const audit = audits.find(a => a.id === auditId);
-    const rulebook = audit ? audit.rulebook : 'SEBI CSCRF';
-    const auditor = audit ? audit.auditor : 'Dr. Evelyn Foster';
-    
-    return generateInitialAuditControls(audits)[auditId] || generateInitialAuditControls([{ id: auditId, rulebook, auditor }])[auditId] || [];
+    return {
+      id: ac.id,
+      controlId: ctrl.framework_rules || [],       // Array of rules like ["GV.OC.S2", "GV.OC.S3"]
+      controlCode: ctrl.control_id || '',           // Original control_id like "SEBI-CSCRF-001"
+      description: ctrl.control_desc || '',         // Control description text
+      domain: ctrl.control_domain || '',
+      category: ctrl.audit_category || '',
+      subcategory: ctrl.audit_subcategory || '',
+      framework: ctrl.audit_type || '',
+      primaryDocuments: ctrl.primary_evidence || [],
+      secondaryDocuments: ctrl.secondary_evidence || [],
+      assignedAuditorId: ac.assigned_to || null,
+      assignedAuditor: assignedAuditorName,
+      status: ac.assigned_to ? 'Assigned' : (ac.status || 'Unassigned'),
+      auditId: ac.framework_id
+    };
   };
 
-  const assignControlsToAuditor = (auditId, controlIds, auditorName) => {
-    setAuditControls(prev => {
-      const currentList = getAuditControls(auditId);
-      const updatedList = currentList.map(ctrl => {
-        if (controlIds.includes(ctrl.id) || controlIds.includes(ctrl.controlId)) {
-          return {
-            ...ctrl,
-            assignedAuditor: auditorName,
-            status: (!auditorName || auditorName === 'Unassigned') ? 'Unassigned' : 'Assigned'
-          };
-        }
-        return ctrl;
-      });
-      return { ...prev, [auditId]: updatedList };
-    });
+  const getAuditControls = (auditId) => {
+    if (auditControls[auditId] && Array.isArray(auditControls[auditId])) {
+      return auditControls[auditId];
+    }
+    return [];
+  };
 
-    logActivity(
-      currentUser?.fullName || 'Admin',
-      'Audit Control',
-      `Assigned ${controlIds.length} control(s) in audit ${auditId} to auditor ${auditorName}`
-    );
+  const fetchAuditControls = async (auditId) => {
+    try {
+      const dbControls = await api.getAuditControlsByFramework(auditId);
+      if (dbControls && Array.isArray(dbControls)) {
+        const mapped = dbControls.map(mapAuditControlFromDb);
+        setAuditControls(prev => ({ ...prev, [auditId]: mapped }));
+        console.log(`[CyberAries] Loaded ${mapped.length} audit controls for ${auditId}.`);
+        return mapped;
+      }
+      return [];
+    } catch (err) {
+      console.error('[CyberAries] Failed to fetch audit controls:', err.response?.data?.detail || err.message);
+      return [];
+    }
+  };
+
+  const assignControlsToAuditor = async (auditId, controlIds, auditorName) => {
+    let auditorId = null;
+    let newStatus = 'Unassigned';
+    
+    if (auditorName && auditorName !== 'Unassigned') {
+      const auditor = auditors.find(a => a.name === auditorName);
+      if (auditor) {
+        auditorId = auditor.id;
+        newStatus = 'Assigned';
+      }
+    }
+
+    try {
+      // Call the API to persist changes for each control
+      await Promise.all(controlIds.map(ctrlId => 
+        api.updateAuditControl(ctrlId, { 
+          assigned_to: auditorId, 
+          status: newStatus 
+        })
+      ));
+
+      // On success, update the local state
+      setAuditControls(prev => {
+        const currentList = getAuditControls(auditId);
+        const updatedList = currentList.map(ctrl => {
+          if (controlIds.includes(ctrl.id) || controlIds.includes(ctrl.controlId)) {
+            return {
+              ...ctrl,
+              assignedAuditor: auditorName,
+              assignedAuditorId: auditorId,
+              status: newStatus
+            };
+          }
+          return ctrl;
+        });
+        return { ...prev, [auditId]: updatedList };
+      });
+
+      logActivity(
+        currentUser?.fullName || 'Admin',
+        'Audit Control',
+        `Assigned ${controlIds.length} control(s) in audit ${auditId} to auditor ${auditorName}`
+      );
+    } catch (err) {
+      console.error('[CyberAries] Failed to assign controls:', err);
+    }
   };
 
   const reassignControlAuditor = (auditId, controlId, newAuditorName) => {
@@ -615,12 +704,12 @@ export const AppProvider = ({ children }) => {
     audits.forEach(audit => {
       const controls = getAuditControls(audit.id);
       const assignedToThisAuditor = controls.filter(c => c.assignedAuditor === auditorName);
-      if (assignedToThisAuditor.length > 0 || audit.auditor === auditorName) {
+      if (assignedToThisAuditor.length > 0 || (audit.auditors || []).includes(auditorName)) {
         results.push({
           auditId: audit.id,
-          auditName: audit.auditName || `${audit.rulebook} Assessment`,
+          auditName: audit.auditName || `${audit.framework} Assessment`,
           company: audit.company,
-          framework: audit.rulebook,
+          framework: audit.framework,
           assignedControlsCount: assignedToThisAuditor.length,
           controls: assignedToThisAuditor
         });
@@ -661,6 +750,7 @@ export const AppProvider = ({ children }) => {
       updateCompany,
       fetchDataFromBackend,
       getAuditControls,
+      fetchAuditControls,
       assignControlsToAuditor,
       reassignControlAuditor,
       getAuditControlMetrics,

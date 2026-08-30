@@ -1,15 +1,20 @@
 import React, { useState, useEffect } from 'react';
 import { useClient } from '../context/ClientContext';
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { Search, Eye, Clipboard, ArrowLeft, Calendar, CheckCircle2, AlertTriangle, ShieldCheck } from 'lucide-react';
 
 export default function MyAudits() {
-  const { controls, allControls, assignedAudits, currentAudit, switchAudit } = useClient();
-  const [viewMode, setViewMode] = useState('list'); // 'list' or 'controls'
+  const { controls, allControls, assignedAudits, clientAudits, currentAudit, switchAudit } = useClient();
+  const location = useLocation();
+  const [viewMode, setViewMode] = useState(location.state?.viewMode || 'list'); // 'list' or 'controls'
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState('All Domains');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [filteredControls, setFilteredControls] = useState([]);
+
+  useEffect(() => {
+    setViewMode(location.state?.viewMode || 'list');
+  }, [location.key, location.state]);
 
   useEffect(() => {
     let result = [...controls];
@@ -18,10 +23,11 @@ export default function MyAudits() {
     if (searchTerm.trim()) {
       const term = searchTerm.toLowerCase();
       result = result.filter(c => 
-        c.id.toLowerCase().includes(term) ||
-        c.name.toLowerCase().includes(term) ||
-        c.description.toLowerCase().includes(term) ||
-        c.standard.toLowerCase().includes(term)
+        (c.id && c.id.toLowerCase().includes(term)) ||
+        (c.name && c.name.toLowerCase().includes(term)) ||
+        (c.description && c.description.toLowerCase().includes(term)) ||
+        (c.standard && c.standard.toLowerCase().includes(term)) ||
+        (c.controlCode && c.controlCode.toLowerCase().includes(term))
       );
     }
 
@@ -39,7 +45,7 @@ export default function MyAudits() {
   }, [controls, searchTerm, selectedDomain, selectedStatus]);
 
   // Unique domains list for filter select
-  const domainsList = ['All Domains', ...new Set(controls.map(c => c.domain))];
+  const domainsList = ['All Domains', ...new Set(controls.map(c => c.domain).filter(Boolean))];
   const statusesList = ['All Statuses', 'Completed', 'In Progress', 'Action Required'];
 
   const getStatusBadgeClass = (status) => {
@@ -51,20 +57,15 @@ export default function MyAudits() {
     }
   };
 
-  const getAuditStats = (auditName) => {
-    const list = allControls[auditName] || [];
+  const getAuditStats = (auditObj) => {
+    const list = allControls[auditObj.audit_name] || [];
     const total = list.length;
     const completed = list.filter(c => c.status === 'Completed').length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     
-    let status = 'Pending';
-    if (pct === 100) status = 'Completed';
-    else if (pct > 0) status = 'In Progress';
+    let status = auditObj.status || 'Pending';
     
-    let dueDate = '2026-08-15';
-    if (auditName === 'ISO 27001') dueDate = '2026-09-15';
-    else if (auditName === 'SEBI CSCRF') dueDate = '2026-06-10';
-    else if (auditName === 'RBI Cyber Security') dueDate = '2026-10-30';
+    let dueDate = auditObj.target_fy || '2026-12-31';
     
     return { total, completed, percentage: pct, status, dueDate };
   };
@@ -86,12 +87,12 @@ export default function MyAudits() {
 
         {/* Audits Card Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
-          {assignedAudits.map(auditName => {
-            const stats = getAuditStats(auditName);
+          {clientAudits.map(auditObj => {
+            const stats = getAuditStats(auditObj);
             
             return (
               <div 
-                key={auditName} 
+                key={auditObj.id} 
                 className="dashboard-section-card" 
                 style={{ 
                   margin: 0,
@@ -107,7 +108,7 @@ export default function MyAudits() {
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                     <div>
-                      <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{auditName}</h3>
+                      <h3 style={{ fontSize: '18px', fontWeight: '700', color: 'var(--text-primary)' }}>{auditObj.audit_name}</h3>
                       <span 
                         style={{ 
                           fontSize: '11px', 
@@ -116,7 +117,7 @@ export default function MyAudits() {
                           color: 'var(--text-secondary)' 
                         }}
                       >
-                        Framework Standards
+                        {auditObj.audit_type || 'Framework Standard'}
                       </span>
                     </div>
                     <span 
@@ -150,7 +151,7 @@ export default function MyAudits() {
                   <div style={{ display: 'flex', gap: '20px', fontSize: '12.5px', color: 'var(--text-secondary)', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Calendar size={14} />
-                      <span>Due: <strong>{stats.dueDate}</strong></span>
+                      <span>Target FY: <strong>{stats.dueDate}</strong></span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Clipboard size={14} />
@@ -162,7 +163,7 @@ export default function MyAudits() {
                 <button 
                   className="btn btn-primary" 
                   style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '6px' }}
-                  onClick={() => handleSelectAudit(auditName)}
+                  onClick={() => handleSelectAudit(auditObj.audit_name)}
                 >
                   <Eye size={16} /> View Audit
                 </button>
@@ -173,6 +174,34 @@ export default function MyAudits() {
       </div>
     );
   }
+
+  const renderDomainBadge = (domain) => {
+    const domStr = domain || '';
+    let bg = '#E8F0FE'; let color = '#1A73E8'; let border = '#ADCEFE';
+    if (domStr.includes('GV') || domStr.includes('Govern')) { bg = '#E8F0FE'; color = '#1A73E8'; border = '#ADCEFE'; }
+    else if (domStr.includes('ID') || domStr.includes('Identify')) { bg = '#E0F7FA'; color = '#00838F'; border = '#80DEEA'; }
+    else if (domStr.includes('PR') || domStr.includes('Protect')) { bg = '#E6F4EA'; color = '#137333'; border = '#A8DAB5'; }
+    else if (domStr.includes('DE') || domStr.includes('Detect')) { bg = '#FEF7E0'; color = '#B06000'; border = '#FDE293'; }
+    else if (domStr.includes('RS') || domStr.includes('Respond')) { bg = '#F3E8FF'; color = '#6B21A8'; border = '#D8B4FE'; }
+    else if (domStr.includes('RC') || domStr.includes('Recover')) { bg = '#FCE8E6'; color = '#C5221F'; border = '#F5C2C7'; }
+
+    return (
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '3px 10px',
+        borderRadius: '9999px',
+        fontSize: '12px',
+        fontWeight: '600',
+        backgroundColor: bg,
+        color: color,
+        border: `1px solid ${border}`,
+        whiteSpace: 'nowrap'
+      }}>
+        {domStr || '—'}
+      </span>
+    );
+  };
 
   return (
     <div className="page-container">
@@ -273,42 +302,79 @@ export default function MyAudits() {
 
         {/* Table layout */}
         <div className="table-scrollable">
-          <table className="excel-table">
+          <table className="excel-table" style={{ minWidth: '1150px' }}>
             <thead>
               <tr>
-                <th style={{ width: '120px' }}>Control ID</th>
-                <th>Control Name</th>
-                <th>Security Domain</th>
-                <th>Standard Reference</th>
-                <th>Status</th>
-                <th style={{ width: '120px' }}>Actions</th>
+                <th style={{ width: '160px' }}>Framework Rules</th>
+                <th style={{ width: '380px' }}>Control Description</th>
+                <th style={{ width: '140px' }}>Control Domain</th>
+                <th style={{ width: '140px' }}>Framework Category</th>
+                <th style={{ width: '120px' }}>Status</th>
+                <th style={{ width: '130px', minWidth: '130px' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredControls.map((ctrl) => (
+              {filteredControls.map((ctrl) => {
+                const rulesArray = ctrl.frameworkRulesList || (ctrl.standard ? ctrl.standard.split(', ').filter(Boolean) : []);
+                const isCompleted = ctrl.status === 'Completed' || ctrl.status === 'Submitted' || ctrl.evidenceFile;
+                const displayStatus = isCompleted ? 'Completed' : 'Incomplete';
+                
+                return (
                 <tr key={ctrl.id}>
-                  <td style={{ fontWeight: '700', color: 'var(--primary)' }}>{ctrl.id}</td>
-                  <td style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{ctrl.name}</td>
-                  <td>{ctrl.domain}</td>
-                  <td style={{ fontFamily: 'monospace', fontSize: '12.5px', color: 'var(--text-secondary)' }}>
-                    {ctrl.standard}
+                  <td>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                      {rulesArray.map((rule, idx) => (
+                        <span 
+                          key={idx} 
+                          title={rule}
+                          style={{ 
+                            backgroundColor: 'var(--bg-secondary)',
+                            border: '1px solid var(--border-color)',
+                            color: 'var(--text-primary)',
+                            padding: '2px 6px',
+                            borderRadius: '4px',
+                            fontSize: '11.5px',
+                            fontFamily: 'monospace',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            maxWidth: '145px'
+                          }}
+                        >
+                          {rule}
+                        </span>
+                      ))}
+                      {rulesArray.length === 0 && <span style={{ color: 'var(--text-muted)' }}>—</span>}
+                    </div>
+                  </td>
+                  <td style={{ fontWeight: '500', color: 'var(--text-primary)', fontSize: '13px' }}>
+                    <div style={{ display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden', maxWidth: '360px' }} title={ctrl.description || ctrl.name}>
+                      {ctrl.description || ctrl.name}
+                    </div>
+                  </td>
+                  <td style={{ fontSize: '13px' }}>
+                    {renderDomainBadge(ctrl.domain)}
+                  </td>
+                  <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
+                    {ctrl.frameworkCategory || '—'}
                   </td>
                   <td>
-                    <span className={getStatusBadgeClass(ctrl.status)}>
-                      {ctrl.status}
+                    <span className={displayStatus === 'Completed' ? 'badge-completed' : 'badge-pending'} style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500', display: 'inline-block' }}>
+                      {displayStatus}
                     </span>
                   </td>
                   <td>
                     <Link 
                       to={`/control-details?id=${ctrl.id}`}
                       className="btn btn-secondary" 
-                      style={{ padding: '6px 12px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                      style={{ padding: '6px 12px', fontSize: '12.5px', display: 'inline-flex', alignItems: 'center', gap: '4px', whiteSpace: 'nowrap' }}
                     >
                       <Eye size={14} /> View Details
                     </Link>
                   </td>
                 </tr>
-              ))}
+                );
+              })}
               {filteredControls.length === 0 && (
                 <tr>
                   <td colSpan="6" style={{ textAlign: 'center', padding: '32px', color: 'var(--text-secondary)' }}>

@@ -60,10 +60,10 @@ export default function ControlDetails() {
   const [errorMsg, setErrorMsg] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
-  
+
   // Track which requirement is being uploaded to (null if generic drag & drop)
   const [activeReqForUpload, setActiveReqForUpload] = useState(null);
-  
+
   // Show successful upload alert banner
   const [successNotification, setSuccessNotification] = useState(false);
 
@@ -77,7 +77,7 @@ export default function ControlDetails() {
   if (!control) return null;
 
   // Determine missing required deliverables
-  const missingRequirements = requirements.filter(req => 
+  const missingRequirements = requirements.filter(req =>
     !uploadedFiles.some(file => file.requirement === req)
   );
 
@@ -106,7 +106,7 @@ export default function ControlDetails() {
     e.preventDefault();
     e.stopPropagation();
     setDragActive(false);
-    
+
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       processFile(e.dataTransfer.files[0]);
     }
@@ -150,7 +150,7 @@ export default function ControlDetails() {
           clearInterval(interval);
           setTimeout(() => {
             const reqToAssign = activeReqForUpload || missingRequirements[0] || 'Additional Evidence';
-            
+
             const newFile = {
               name: file.name,
               size: formatBytes(file.size),
@@ -222,7 +222,7 @@ export default function ControlDetails() {
       {/* Page Header */}
       <div className="page-header" style={{ marginBottom: '20px' }}>
         <div className="page-title-section">
-          <Link to="/my-audits" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px', fontWeight: '500' }}>
+          <Link to="/my-audits" state={{ viewMode: 'controls' }} style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--text-secondary)', textDecoration: 'none', fontSize: '13.5px', marginBottom: '8px', fontWeight: '500' }}>
             <ArrowLeft size={14} /> Back to {currentAudit} Requirements List
           </Link>
           <h1 className="page-title">{control.id} - Details & Evidence</h1>
@@ -242,7 +242,7 @@ export default function ControlDetails() {
             {control.status}
           </span>
         </div>
-        
+
         <p style={{ fontSize: '13.5px', color: 'var(--text-secondary)', lineHeight: '1.6', marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px' }}>
           <strong>Description:</strong> {control.description}
         </p>
@@ -290,7 +290,7 @@ export default function ControlDetails() {
           <h4 style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Uploaded Evidence
           </h4>
-          
+
           {uploadedFiles.length > 0 ? (
             <div className="excel-table-container" style={{ margin: 0 }}>
               <div className="table-scrollable">
@@ -335,24 +335,24 @@ export default function ControlDetails() {
                         </td>
                         <td>
                           <div style={{ display: 'flex', gap: '8px' }}>
-                            <button 
-                              className="btn btn-secondary" 
+                            <button
+                              className="btn btn-secondary"
                               style={{ padding: '6px 8px', fontSize: '12px' }}
                               onClick={() => handlePreviewFile(file)}
                             >
                               <Eye size={12} /> Preview
                             </button>
-                            
-                            <button 
-                              className="btn btn-secondary" 
+
+                            <button
+                              className="btn btn-secondary"
                               style={{ padding: '6px 8px', fontSize: '12px' }}
                               onClick={() => alert(`Downloading: ${file.name}`)}
                             >
                               <Download size={12} /> Download
                             </button>
 
-                            <button 
-                              className="btn btn-secondary" 
+                            <button
+                              className="btn btn-secondary"
                               style={{ padding: '6px 8px', fontSize: '12px', color: 'var(--primary)' }}
                               onClick={() => {
                                 if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
@@ -382,7 +382,7 @@ export default function ControlDetails() {
           <h4 style={{ fontSize: '13.5px', fontWeight: '600', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
             Missing Evidence
           </h4>
-          
+
           {missingRequirements.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {missingRequirements.map((req, idx) => (
@@ -394,8 +394,8 @@ export default function ControlDetails() {
                       <span style={{ display: 'block', fontSize: '11px', color: '#C5221F', fontWeight: '500' }}>Status: Pending</span>
                     </div>
                   </div>
-                  <button 
-                    className="btn btn-primary" 
+                  <button
+                    className="btn btn-primary"
                     style={{ padding: '6px 12px', fontSize: '12.5px' }}
                     onClick={() => handleUploadNowClick(req)}
                   >
@@ -434,7 +434,7 @@ export default function ControlDetails() {
             </div>
           ) : (
             /* Drag and Drop Box */
-            <div 
+            <div
               className={`dropzone ${dragActive ? 'dragover' : ''}`}
               onDragEnter={handleDrag}
               onDragOver={handleDrag}
@@ -442,9 +442,9 @@ export default function ControlDetails() {
               onDrop={handleDrop}
               onClick={triggerFileSelect}
             >
-              <input 
-                type="file" 
-                ref={fileInputRef} 
+              <input
+                type="file"
+                ref={fileInputRef}
                 style={{ display: 'none' }}
                 onChange={handleFileChange}
                 accept=".pdf,.doc,.docx,.png,.jpg,.jpeg,.zip"
@@ -460,9 +460,9 @@ export default function ControlDetails() {
       </div>
 
       {/* Mock Document Preview Modal */}
-      <Modal 
-        isOpen={previewOpen} 
-        title={`File Preview: ${previewFile?.name}`} 
+      <Modal
+        isOpen={previewOpen}
+        title={`File Preview: ${previewFile?.name}`}
         onClose={() => setPreviewOpen(false)}
       >
         <div style={{ backgroundColor: '#F8F9FA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '28px', minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>

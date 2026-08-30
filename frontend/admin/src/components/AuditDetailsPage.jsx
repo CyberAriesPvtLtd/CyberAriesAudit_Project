@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Modal from './Modal';
@@ -19,7 +19,6 @@ import {
   Shield,
   Activity
 } from 'lucide-react';
-import { CONTROL_DOMAINS, FRAMEWORK_CATEGORIES } from '../data/frameworkRulesData';
 
 export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp, onOpenEdit }) {
   const { auditId: paramAuditId } = useParams();
@@ -32,6 +31,7 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
     assignControlsToAuditor, 
     reassignControlAuditor, 
     getAuditControlMetrics,
+    fetchAuditControls,
     updateAudit
   } = useApp();
 
@@ -42,13 +42,10 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
       return audits.find(a => a.id === paramAuditId) || {
         id: paramAuditId,
         auditName: `${paramAuditId} Assessment`,
-        company: 'Aether Technologies',
-        client: 'Sarah Connor',
-        auditor: 'Dr. Evelyn Foster',
-        rulebook: 'SEBI CSCRF',
-        status: 'In Progress',
-        progress: 65,
-        dueDate: '2026-12-31'
+        company: 'Unknown',
+        auditors: [],
+        framework: 'Unknown',
+        status: 'Pending',
       };
     }
     return null;
@@ -62,17 +59,62 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
     }
   };
 
+  // Loading state for controls
+  const [isLoadingControls, setIsLoadingControls] = useState(false);
+
+  // Fetch controls from backend when audit changes
+  useEffect(() => {
+    if (!audit) return;
+    const auditId = audit.id;
+    // Only fetch if not already loaded
+    if (!auditControls[auditId] || auditControls[auditId].length === 0) {
+      setIsLoadingControls(true);
+      fetchAuditControls(auditId).finally(() => setIsLoadingControls(false));
+    }
+  }, [audit?.id]);
+
   // Mapped controls for this specific audit
   const controls = useMemo(() => {
     if (!audit) return [];
-    return (auditControls && auditControls[audit.id]) || [];
-  }, [auditControls, audit]);
+    const rawControls = (auditControls && auditControls[audit.id]) || [];
+    
+    // Dynamically resolve auditor name in case auditors state loaded after controls
+    return rawControls.map(ctrl => {
+      let resolvedName = ctrl.assignedAuditor;
+      if (ctrl.assignedAuditorId) {
+        const auditor = auditors.find(a => a.id === ctrl.assignedAuditorId);
+        if (auditor) {
+          resolvedName = auditor.name;
+        }
+      }
+      return {
+        ...ctrl,
+        assignedAuditor: resolvedName
+      };
+    });
+  }, [auditControls, audit, auditors]);
+
+  // Dynamic filter options based on actual data
+  const { dynamicDomains, dynamicCategories } = useMemo(() => {
+    const domains = new Set();
+    const categories = new Set();
+    
+    controls.forEach(ctrl => {
+      if (ctrl.domain) domains.add(ctrl.domain);
+      if (ctrl.category) categories.add(ctrl.category);
+    });
+    
+    return {
+      dynamicDomains: Array.from(domains).sort(),
+      dynamicCategories: Array.from(categories).sort()
+    };
+  }, [controls]);
 
   // Metrics summary for this audit
   const metrics = useMemo(() => {
-    if (!audit) return { total: 24, assigned: 18, unassigned: 6, auditorsCount: 3, assignedAuditorsList: [], progressPct: 75, assignmentStatus: 'Partially Assigned' };
+    if (!audit || controls.length === 0) return { total: 0, assigned: 0, unassigned: 0, auditorsCount: 0, assignedAuditorsList: [], progressPct: 0, assignmentStatus: 'Unassigned' };
     return getAuditControlMetrics(audit.id);
-  }, [getAuditControlMetrics, audit]);
+  }, [getAuditControlMetrics, audit, controls]);
 
   // Control Filters state
   const [searchQuery, setSearchQuery] = useState('');
@@ -96,9 +138,9 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
     return controls.filter(ctrl => {
       // Search
       const matchesSearch = searchQuery === '' || 
-        ctrl.controlId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ctrl.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        ctrl.description.toLowerCase().includes(searchQuery.toLowerCase());
+        (Array.isArray(ctrl.controlId) ? ctrl.controlId.some(rule => rule.toLowerCase().includes(searchQuery.toLowerCase())) : String(ctrl.controlId).toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (ctrl.controlCode && ctrl.controlCode.toLowerCase().includes(searchQuery.toLowerCase())) ||
+        (ctrl.description && ctrl.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       // Domain
       const matchesDomain = !selectedDomain || ctrl.domain === selectedDomain;
@@ -469,7 +511,7 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
                 style={{ padding: '6px 10px', fontSize: '12.5px' }}
               >
                 <option value="">All Domains</option>
-                {CONTROL_DOMAINS.map(d => (
+                {dynamicDomains.map(d => (
                   <option key={d} value={d}>{d}</option>
                 ))}
               </select>
@@ -487,7 +529,7 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
                 style={{ padding: '6px 10px', fontSize: '12.5px' }}
               >
                 <option value="">All Categories</option>
-                {FRAMEWORK_CATEGORIES.map(c => (
+                {dynamicCategories.map(c => (
                   <option key={c} value={c}>{c}</option>
                 ))}
               </select>
@@ -608,6 +650,18 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
         )}
 
         {/* ── MAPPED CONTROLS TABLE ── */}
+        {isLoadingControls ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-secondary)' }}>
+            <RefreshCw size={28} style={{ animation: 'spin 1s linear infinite', marginBottom: '12px' }} />
+            <p style={{ fontSize: '15px', fontWeight: '500' }}>Loading controls from database...</p>
+          </div>
+        ) : filteredControls.length === 0 && controls.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '48px 0', color: 'var(--text-secondary)' }}>
+            <ClipboardList size={36} style={{ marginBottom: '12px', opacity: 0.4 }} />
+            <p style={{ fontSize: '15px', fontWeight: '500' }}>No controls found for this audit.</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>Controls are auto-generated when an audit is created. Try refreshing or re-creating the audit.</p>
+          </div>
+        ) : (
         <div className="table-responsive" style={{ overflowX: 'auto' }}>
           <table className="excel-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
@@ -624,7 +678,7 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
                   Control ID
                 </th>
                 <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: '700', fontSize: '12.5px' }}>
-                  Control Name
+                  Control Description
                 </th>
                 <th style={{ padding: '12px 14px', textAlign: 'left', fontWeight: '700', fontSize: '12.5px' }}>
                   Domain / Category
@@ -666,30 +720,31 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
                       />
                     </td>
 
-                    {/* Control ID */}
-                    <td style={{ padding: '12px 14px', fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', whiteSpace: 'nowrap' }}>
-                      <span style={{ fontFamily: 'monospace', backgroundColor: '#F1F5F9', padding: '3px 8px', borderRadius: '4px', border: '1px solid var(--border-color)' }}>
-                        {ctrl.controlId}
-                      </span>
+                    {/* Control ID — framework_rules as list */}
+                    <td style={{ padding: '12px 14px', fontWeight: '600', fontSize: '12.5px', color: 'var(--text-primary)' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '3px' }}>
+                        {(Array.isArray(ctrl.controlId) ? ctrl.controlId : [ctrl.controlId]).map((rule, idx) => (
+                          <span key={idx} style={{ fontFamily: 'monospace', backgroundColor: '#F1F5F9', padding: '2px 8px', borderRadius: '4px', border: '1px solid var(--border-color)', fontSize: '12px', display: 'inline-block', width: 'fit-content' }}>
+                            {rule}
+                          </span>
+                        ))}
+                      </div>
                     </td>
 
-                    {/* Control Name & Description */}
-                    <td style={{ padding: '12px 14px', maxWidth: '300px' }}>
-                      <div style={{ fontWeight: '600', fontSize: '13px', color: 'var(--text-primary)', marginBottom: '2px' }}>
-                        {ctrl.name}
-                      </div>
-                      <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' }}>
+                    {/* Control Description */}
+                    <td style={{ padding: '12px 14px', maxWidth: '350px' }}>
+                      <div style={{ fontSize: '12.5px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', whiteSpace: 'normal' }}>
                         {ctrl.description}
                       </div>
                     </td>
 
-                    {/* Domain / Category */}
+                    {/* Domain / Category+Subcategory */}
                     <td style={{ padding: '12px 14px', fontSize: '12.5px' }}>
-                      <div style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                      <div style={{ fontWeight: '600', color: 'var(--text-primary)', marginBottom: '2px' }}>
                         {ctrl.domain}
                       </div>
                       <div style={{ fontSize: '11.5px', color: 'var(--text-secondary)' }}>
-                        {ctrl.category}
+                        {ctrl.category}{ctrl.subcategory ? ` / ${ctrl.subcategory}` : ''}
                       </div>
                     </td>
 
@@ -752,6 +807,7 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
             </tbody>
           </table>
         </div>
+        )}
       </div>
 
       {/* ── 7. REASSIGN SINGLE CONTROL MODAL ── */}
