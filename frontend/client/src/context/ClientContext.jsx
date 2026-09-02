@@ -1,15 +1,25 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import api from '../services/api';
+import api, { uploadEvidenceFile, deleteEvidenceItem as apiDeleteEvidenceItem } from '../services/api';
+import {
+  initialAllControls as mockControls,
+  initialAllFindings as mockFindings,
+  initialActivities as mockActivities,
+} from '../data/mockData';
 
 const ClientContext = createContext();
 
-// Findings remain as dummy data for now (auditor-client communication pipeline is a future feature)
-const initialAllFindings = {
-};
+// ─── Toggle ──────────────────────────────────────────────────────
+// Set VITE_USE_MOCK_API=true in frontend/client/.env to bypass the
+// backend entirely (useful for frontend devs who don't run Docker).
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_API === 'true';
 
-const initialActivities = [
-  { id: 'ACT-C01', user: 'System', type: 'System', message: 'Client compliance score initialized.', timestamp: '2026-07-05T09:00:00Z' },
-];
+const formatBytesForContext = (bytes, decimals = 2) => {
+  if (!bytes || bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(decimals)) + ' ' + sizes[i];
+};
 
 const defaultSettings = {
   timezone: 'UTC/GMT +5:30',
@@ -19,86 +29,57 @@ const defaultSettings = {
   weeklyDigest: false,
 };
 
-// ─── Helper: Map backend AuditControlResponse to client control shape ───
-const mapAuditControlForClient = (ac) => {
-  const ctrl = ac.control || {};
-  const frameworkRules = ctrl.framework_rules || [];
-  const primaryEvidence = ctrl.primary_evidence || [];
-
-  return {
-    id: ac.id,
-    controlCode: ctrl.control_id || '',
-    name: ctrl.control_desc ? ctrl.control_desc.substring(0, 80) : 'Unnamed Control',
-    domain: ctrl.control_domain || '',
-    standard: frameworkRules.join(', '),
-    description: ctrl.control_desc || '',
-    requiredEvidence: primaryEvidence.join('; '),
-    status: ac.status || 'Action Required',
-    evidenceFile: null,
-    evidenceSize: null,
-    evidenceDate: null,
-    assignedAuditorId: ac.assigned_to || null,
-    frameworkRulesList: frameworkRules,
-    frameworkCategory: ctrl.audit_category || '',
-  };
-};
-
-// ─── Helper: Map backend ControlsResponse to client rulebook shape ───
-const mapControlFromDb = (dbControl) => {
-  const rules = dbControl.framework_rules || [];
-  return {
-    id: dbControl.id,
-    frameworkRules: rules.join(', '),
-    frameworkRulesList: rules,
-    controlDomain: dbControl.control_domain || '',
-    frameworkType: dbControl.audit_type,
-    frameworkCategory: dbControl.audit_category,
-    frameworkSubcategory: dbControl.audit_subcategory,
-    description: dbControl.control_desc,
-    primaryDocuments: dbControl.primary_evidence || [],
-    secondaryDocuments: dbControl.secondary_evidence || [],
-    lastUpdated: dbControl.created_at
-      ? new Date(dbControl.created_at).toLocaleDateString('en-GB').split('/').join('-')
-      : '',
-  };
-};
-
 export const ClientProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => {
     const saved = localStorage.getItem('cc_user');
     return saved ? JSON.parse(saved) : null;
   });
 
-  // Audit objects from backend: [{ id, audit_name, audit_type, company_id, ... }]
-  const [clientAudits, setClientAudits] = useState([]);
-
-  // Derived list of audit display names for dropdowns / cards
-  const assignedAudits = clientAudits.map(a => a.audit_name);
-
-  // Currently selected audit name
-  const [currentAudit, setCurrentAudit] = useState(() => {
-    const saved = localStorage.getItem('cc_current_audit');
-    return saved || '';
+  const [assignedAudits, setAssignedAudits] = useState(() => {
+    if (USE_MOCK) return Object.keys(mockControls);
+    return [];
   });
 
-  // Controls keyed by audit ID: { [auditId]: [...controls] }
-  const [auditControlsMap, setAuditControlsMap] = useState({});
+  const [clientAudits, setClientAudits] = useState(() => {
+    if (USE_MOCK) {
+      return Object.keys(mockControls).map((key, idx) => ({
+        id: `mock-audit-${idx}`,
+        audit_name: key,
+        audit_type: 'Framework Standard',
+        status: 'In Progress',
+        target_fy: '2026-12-31'
+      }));
+    }
+    return [];
+  });
 
-  // Loading state
-  const [isLoadingAudits, setIsLoadingAudits] = useState(false);
-  const [isLoadingControls, setIsLoadingControls] = useState(false);
+  const [currentAudit, setCurrentAudit] = useState(() => {
+    const saved = localStorage.getItem('cc_current_audit');
+    if (saved) return saved;
+    if (USE_MOCK) return Object.keys(mockControls)[0];
+    return '';
+  });
 
-  // Rulebook (all controls for Framework Management page)
-  const [rulebook, setRulebook] = useState([]);
+  const [allControls, setAllControls] = useState(() => {
+    if (USE_MOCK) {
+      const saved = localStorage.getItem('cc_all_controls');
+      return saved ? JSON.parse(saved) : mockControls;
+    }
+    return {};
+  });
+
+  // Maps auditName -> array of { id (audit_control id), backendControlId, ... }
+  // This lets uploadEvidence pass the real audit_control_id to the backend.
+  const [auditControlMap, setAuditControlMap] = useState({});
 
   const [allFindings, setAllFindings] = useState(() => {
     const saved = localStorage.getItem('cc_all_findings');
-    return saved ? JSON.parse(saved) : initialAllFindings;
+    return saved ? JSON.parse(saved) : (USE_MOCK ? mockFindings : {});
   });
 
   const [activities, setActivities] = useState(() => {
     const saved = localStorage.getItem('cc_activities');
-    return saved ? JSON.parse(saved) : initialActivities;
+    return saved ? JSON.parse(saved) : (USE_MOCK ? mockActivities : []);
   });
 
   const [settings, setSettings] = useState(() => {
@@ -106,24 +87,124 @@ export const ClientProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : defaultSettings;
   });
 
-  // ─── Get current audit object ───
-  const currentAuditObj = clientAudits.find(a => a.audit_name === currentAudit) || null;
+  // ─── Fetch real data from backend ─────────────────────────────
+  const fetchClientData = useCallback(async () => {
+    if (USE_MOCK || !currentUser?.companyId) return;
 
-  // ─── Derived controls for current audit ───
-  const controls = currentAuditObj ? (auditControlsMap[currentAuditObj.id] || []) : [];
+    try {
+      // 1. Get the company's assigned audit frameworks
+      const frameworks = await api.getCompanyAuditFrameworks(currentUser.companyId);
+      if (!frameworks || frameworks.length === 0) {
+        console.log('[CyberAries] No audits assigned to this company.');
+        setAssignedAudits([]);
+        setAllControls({});
+        return;
+      }
 
-  // ─── allControls keyed by audit name (for stats in MyAudits) ───
-  const allControls = {};
-  clientAudits.forEach(a => {
-    allControls[a.audit_name] = auditControlsMap[a.id] || [];
-  });
+      const auditNames = frameworks.map(f => f.audit_name || `${f.audit_type} Assessment`);
+      setAssignedAudits(auditNames);
+      setClientAudits(frameworks);
 
-  const findings = allFindings[currentAudit] || [];
+      // If no currentAudit selected yet, pick the first one
+      if (!currentAudit || !auditNames.includes(currentAudit)) {
+        setCurrentAudit(auditNames[0]);
+      }
 
-  // Sync to localStorage
+      // 2. For each framework, fetch its AuditControls (with nested Controls)
+      const controlsByAudit = {};
+      const acMap = {};
+
+      for (const fw of frameworks) {
+        const auditName = fw.audit_name || `${fw.audit_type} Assessment`;
+        try {
+          const auditControls = await api.getAuditControlsByFramework(fw.id);
+
+          // Also fetch evidence linked to each audit control
+          const controlsWithEvidence = await Promise.all(
+            (auditControls || []).map(async (ac) => {
+              const ctrl = ac.control || {};
+              const rules = ctrl.framework_rules || [];
+              const primaryDocs = ctrl.primary_evidence || [];
+              const secondaryDocs = ctrl.secondary_evidence || [];
+
+              // Fetch evidence files linked to this audit control
+              let evidenceFiles = [];
+
+              try {
+                const linkedEvidence = await api.getEvidenceForAuditControl(ac.id);
+                if (linkedEvidence && linkedEvidence.length > 0) {
+                  evidenceFiles = linkedEvidence.map(link => {
+                    const item = link.evidence_item;
+                    if (!item) return null;
+                    return {
+                      name: item.file_name,
+                      size: item.file_size ? formatBytesForContext(item.file_size) : '—',
+                      date: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                      type: item.file_name.split('.').pop().toUpperCase(),
+                      uploadedBy: item.uploaded_by || 'Client',
+                      status: 'Uploaded',
+                      evidenceItemId: item.id,
+                      linkId: link.id, // the AuditControlEvidence link id
+                    };
+                  }).filter(Boolean);
+                }
+              } catch (e) {
+                // Evidence fetch failed — non-critical, continue without evidence data
+              }
+
+              return {
+                id: ac.id,                            // This IS the audit_control_id
+                name: ctrl.control_desc || 'Untitled Control',
+                domain: ctrl.control_domain || '',
+                standard: rules.join(', ') || ctrl.control_id || '',
+                status: evidenceFiles.length > 0 ? 'In Progress' : (ac.status || 'Action Required'),
+                description: ctrl.control_desc || '',
+                requiredEvidence: [...primaryDocs, ...secondaryDocs].join(', ') || 'Evidence documents required',
+                evidenceFiles,
+                frameworkCategory: ctrl.audit_category || '',
+                frameworkSubcategory: ctrl.audit_subcategory || '',
+              };
+            })
+          );
+
+          controlsByAudit[auditName] = controlsWithEvidence;
+
+          // Build a lookup: controlId (frontend) -> real audit_control_id (backend)
+          acMap[auditName] = {};
+          controlsWithEvidence.forEach(c => {
+            acMap[auditName][c.id] = c.id; // they're the same — the ac.id
+          });
+
+        } catch (err) {
+          console.warn(`[CyberAries] Failed to fetch controls for ${auditName}:`, err.message);
+          controlsByAudit[auditName] = [];
+        }
+      }
+
+      setAllControls(controlsByAudit);
+      setAuditControlMap(acMap);
+      console.log(`[CyberAries] Client data loaded: ${frameworks.length} audits, ${Object.values(controlsByAudit).flat().length} controls.`);
+
+    } catch (err) {
+      console.error('[CyberAries] Failed to fetch client data:', err.message);
+    }
+  }, [currentUser?.companyId]);
+
+  // Fetch data on login / mount (only when not using mock)
+  useEffect(() => {
+    if (!USE_MOCK && currentUser?.companyId) {
+      fetchClientData();
+    }
+  }, [currentUser?.companyId, fetchClientData]);
+
+  // Sync state to local storage
   useEffect(() => {
     localStorage.setItem('cc_current_audit', currentAudit);
   }, [currentAudit]);
+
+  useEffect(() => {
+    localStorage.setItem('cc_all_controls', JSON.stringify(allControls));
+  }, [allControls]);
 
   useEffect(() => {
     localStorage.setItem('cc_all_findings', JSON.stringify(allFindings));
@@ -137,106 +218,22 @@ export const ClientProvider = ({ children }) => {
     localStorage.setItem('cc_settings', JSON.stringify(settings));
   }, [settings]);
 
-  // ─── Fetch audits for client's company ───
-  const fetchClientAudits = useCallback(async (companyId) => {
-    if (!companyId) return;
-    setIsLoadingAudits(true);
-    try {
-      const allAudits = await api.getAuditFrameworks();
-      const myAudits = allAudits.filter(a => a.companyID === companyId || a.company_id === companyId);
-      setClientAudits(myAudits);
-      console.log(`[CyberAries Client] Loaded ${myAudits.length} audits for company ${companyId}.`);
+  // Derived Active Data based on selected audit
+  const controls = allControls[currentAudit] || [];
+  const findings = allFindings[currentAudit] || [];
 
-      // Auto-select the first audit if no current audit or current doesn't exist
-      if (myAudits.length > 0) {
-        const currentExists = myAudits.some(a => a.audit_name === currentAudit);
-        if (!currentExists) {
-          setCurrentAudit(myAudits[0].audit_name);
-        }
-      }
-
-      // Pre-fetch controls for all audits
-      for (const audit of myAudits) {
-        await fetchAuditControls(audit.id);
-      }
-    } catch (err) {
-      console.error('[CyberAries Client] Failed to fetch audits:', err.response?.data?.detail || err.message);
-    } finally {
-      setIsLoadingAudits(false);
-    }
-  }, [currentAudit]);
-
-  // ─── Fetch controls for a specific audit ───
-  const fetchAuditControls = async (auditId) => {
-    if (!auditId) return [];
-    setIsLoadingControls(true);
-    try {
-      const dbControls = await api.getAuditControlsByFramework(auditId);
-      if (dbControls && Array.isArray(dbControls)) {
-        const mapped = dbControls.map(mapAuditControlForClient);
-        setAuditControlsMap(prev => ({ ...prev, [auditId]: mapped }));
-        console.log(`[CyberAries Client] Loaded ${mapped.length} controls for audit ${auditId}.`);
-        return mapped;
-      }
-      return [];
-    } catch (err) {
-      console.error('[CyberAries Client] Failed to fetch controls:', err.response?.data?.detail || err.message);
-      return [];
-    } finally {
-      setIsLoadingControls(false);
-    }
-  };
-
-  // ─── Fetch all controls for Framework Management page ───
-  const fetchRulebook = useCallback(async () => {
-    try {
-      const dbControls = await api.getControls();
-      if (dbControls && Array.isArray(dbControls)) {
-        const mapped = dbControls.map(mapControlFromDb);
-        setRulebook(mapped);
-        console.log(`[CyberAries Client] Loaded ${mapped.length} controls for rulebook.`);
-      }
-    } catch (err) {
-      console.error('[CyberAries Client] Failed to fetch rulebook:', err.response?.data?.detail || err.message);
-    }
-  }, []);
-
-  // ─── Auto-fetch on mount if user is already logged in ───
-  useEffect(() => {
-    if (currentUser?.companyId) {
-      fetchClientAudits(currentUser.companyId);
-      fetchRulebook();
-    }
-  }, [currentUser?.companyId]);
-
-  // ─── Switch audit (from dropdown or card click) ───
   const switchAudit = (auditName) => {
-    setCurrentAudit(auditName);
-
-    // Ensure controls are loaded for this audit
-    const auditObj = clientAudits.find(a => a.audit_name === auditName);
-    if (auditObj && !auditControlsMap[auditObj.id]) {
-      fetchAuditControls(auditObj.id);
+    if (allControls[auditName]) {
+      setCurrentAudit(auditName);
+      addActivityLog(currentUser?.fullName || 'Client', 'System', `Switched active workspace view to: ${auditName}`);
     }
-
-    addActivityLog(currentUser?.fullName || 'Client', 'System', `Switched active workspace view to: ${auditName}`);
   };
 
-  // ─── Auth Operations ───
+  // Auth Operations
   const login = async (email, password) => {
     try {
       const response = await api.login(email, password);
-
-      let fetchedCompanyName = '';
-      if (response.user.company_id) {
-        try {
-          const companyData = await api.getCompanyById(response.user.company_id);
-          fetchedCompanyName = companyData.company_name;
-        } catch (cErr) {
-          console.warn('[CyberAries] Failed to fetch company name:', cErr);
-        }
-      }
-
+      
       const userData = {
         id: response.user.id,
         fullName: response.user.name,
@@ -244,7 +241,6 @@ export const ClientProvider = ({ children }) => {
         username: response.user.username,
         role: response.user.role,
         companyId: response.user.company_id,
-        companyName: fetchedCompanyName,
         token: response.access_token,
         avatarInitials: response.user.name
           ? response.user.name.split(' ').map(n => n[0]).join('').toUpperCase()
@@ -255,13 +251,7 @@ export const ClientProvider = ({ children }) => {
       localStorage.setItem('cc_user', JSON.stringify(userData));
       localStorage.setItem('cc_token', response.access_token);
       addActivityLog(userData.fullName, 'System', 'Client logged in successfully.');
-
-      // Fetch audits for this client's company
-      if (userData.companyId) {
-        await fetchClientAudits(userData.companyId);
-        await fetchRulebook();
-      }
-
+      
       return { success: true };
     } catch (err) {
       console.error('[CyberAries] Client login failed:', err.response?.data?.detail || err.message);
@@ -291,77 +281,131 @@ export const ClientProvider = ({ children }) => {
   };
 
   // Evidence Management
-  const uploadEvidence = (controlId, fileName, fileSize) => {
-    // Update controls in the auditControlsMap for the current audit
-    if (!currentAuditObj) return;
-    const auditId = currentAuditObj.id;
+  const uploadEvidence = async (controlId, file, onProgress) => {
+    if (!currentUser?.companyId || !currentUser?.id) {
+      console.error('[CyberAries] Cannot upload evidence: missing companyId or user id.');
+      return { success: false, error: 'You must be logged in with a company account to upload evidence.' };
+    }
 
-    setAuditControlsMap(prev => {
-      const currentList = prev[auditId] || [];
-      const updatedList = currentList.map(c => {
-        if (c.id === controlId) {
-          return {
-            ...c,
-            evidenceFile: fileName,
-            evidenceSize: fileSize,
-            evidenceDate: new Date().toISOString().split('T')[0],
-            status: 'In Progress',
-          };
-        }
-        return c;
+    // Resolve the real audit_control_id for the backend.
+    // In real mode the controlId IS the audit_control_id already.
+    // In mock mode we pass null (same as before).
+    const auditControlId = USE_MOCK ? null : controlId;
+
+    try {
+      const result = await uploadEvidenceFile({
+        file,
+        companyId: currentUser.companyId,
+        uploadedBy: currentUser.id,
+        auditControlId,
+        onProgress,
       });
-      return { ...prev, [auditId]: updatedList };
-    });
 
-    addActivityLog(currentUser?.fullName || 'Client', 'Document', `Uploaded evidence file: "${fileName}" for ${controlId} under ${currentAudit}.`);
+      const fileName = file.name;
+      const fileSize = formatBytesForContext(file.size);
 
-    // Auto-resolve any pending findings for this control
-    setAllFindings(prev => {
-      const currentList = prev[currentAudit] || [];
-      const updatedList = currentList.map(f => {
-        if (f.id === controlId && f.status === 'Pending Response') {
-          return {
-            ...f,
-            status: 'Resolved',
-            comments: [
-              ...f.comments,
-              {
-                sender: 'Client',
-                name: currentUser?.fullName || 'Client User',
-                message: `I have uploaded the requested evidence file: "${fileName}"`,
-                timestamp: new Date().toISOString(),
-                attachment: fileName
-              }
-            ]
-          };
-        }
-        return f;
+      setAllControls(prev => {
+        const currentList = prev[currentAudit] || [];
+        const updatedList = currentList.map(c => {
+          if (c.id === controlId) {
+            return {
+              ...c,
+              evidenceFile: fileName, // keep for backward compatibility
+              evidenceSize: fileSize,
+              evidenceDate: new Date().toISOString().split('T')[0],
+              status: 'In Progress',
+              evidenceItemId: result.evidence.id,
+              evidenceFiles: [
+                ...(c.evidenceFiles || []),
+                {
+                  name: fileName,
+                  size: fileSize,
+                  date: new Date().toISOString().split('T')[0],
+                  type: fileName.split('.').pop().toUpperCase(),
+                  uploadedBy: currentUser?.fullName || 'Client',
+                  status: 'Uploaded',
+                  evidenceItemId: result.evidence.id
+                }
+              ]
+            };
+          }
+          return c;
+        });
+        return { ...prev, [currentAudit]: updatedList };
       });
-      return { ...prev, [currentAudit]: updatedList };
-    });
+
+      addActivityLog(currentUser?.fullName || 'Client', 'Document', `Uploaded evidence file: "${fileName}" for ${controlId} under ${currentAudit}.`);
+
+      // Auto-resolve any pending findings for this control
+      setAllFindings(prev => {
+        const currentList = prev[currentAudit] || [];
+        const updatedList = currentList.map(f => {
+          if (f.id === controlId && f.status === 'Pending Response') {
+            return {
+              ...f,
+              status: 'Resolved',
+              comments: [
+                ...f.comments,
+                {
+                  sender: 'Client',
+                  name: currentUser?.fullName || 'Sarah Connor',
+                  message: `I have uploaded the requested evidence file: "${fileName}"`,
+                  timestamp: new Date().toISOString(),
+                  attachment: fileName
+                }
+              ]
+            };
+          }
+          return f;
+        });
+        return { ...prev, [currentAudit]: updatedList };
+      });
+
+      return { success: true, evidenceItemId: result.evidence.id };
+    } catch (err) {
+      console.error('[CyberAries] Evidence upload failed:', err.response?.data?.detail || err.message);
+      return { success: false, error: err.response?.data?.detail || 'Upload failed. Please try again.' };
+    }
   };
 
-  const deleteEvidence = (controlId) => {
-    if (!currentAuditObj) return;
-    const auditId = currentAuditObj.id;
+  const deleteEvidence = async (controlId, evidenceItemId) => {
     let fileName = '';
 
-    setAuditControlsMap(prev => {
-      const currentList = prev[auditId] || [];
+    setAllControls(prev => {
+      const currentList = prev[currentAudit] || [];
+      const found = currentList.find(c => c.id === controlId);
+      if (found && found.evidenceFiles) {
+        const file = found.evidenceFiles.find(f => f.evidenceItemId === evidenceItemId);
+        if (file) fileName = file.name;
+      }
+      return prev;
+    });
+
+    if (evidenceItemId) {
+      try {
+        await apiDeleteEvidenceItem(evidenceItemId);
+      } catch (err) {
+        console.error('[CyberAries] Failed to delete evidence from backend:', err.response?.data?.detail || err.message);
+      }
+    }
+
+    setAllControls(prev => {
+      const currentList = prev[currentAudit] || [];
       const updatedList = currentList.map(c => {
         if (c.id === controlId) {
-          fileName = c.evidenceFile;
+          const newFiles = (c.evidenceFiles || []).filter(f => f.evidenceItemId !== evidenceItemId);
           return {
             ...c,
-            evidenceFile: null,
-            evidenceSize: null,
-            evidenceDate: null,
-            status: 'Action Required',
+            evidenceFiles: newFiles,
+            status: newFiles.length > 0 ? 'In Progress' : 'Action Required',
           };
         }
         return c;
       });
-      return { ...prev, [auditId]: updatedList };
+      return {
+        ...prev,
+        [currentAudit]: updatedList
+      };
     });
 
     if (fileName) {
@@ -379,7 +423,7 @@ export const ClientProvider = ({ children }) => {
             ...f.comments,
             {
               sender: 'Client',
-              name: currentUser?.fullName || 'Client User',
+              name: currentUser?.fullName || 'Sarah Connor',
               message,
               timestamp: new Date().toISOString(),
               attachment
@@ -393,11 +437,14 @@ export const ClientProvider = ({ children }) => {
         }
         return f;
       });
-      return { ...prev, [currentAudit]: updatedList };
+      return {
+        ...prev,
+        [currentAudit]: updatedList
+      };
     });
 
     if (attachment) {
-      uploadEvidence(findingId, attachment, '1.2 MB');
+      addActivityLog(currentUser?.fullName || 'Client', 'Audit', `Attached "${attachment}" to reply for ${findingId} under ${currentAudit}.`);
     } else {
       addActivityLog(currentUser?.fullName || 'Client', 'Audit', `Submitted clarification reply for ${findingId} under ${currentAudit}.`);
     }
@@ -409,7 +456,7 @@ export const ClientProvider = ({ children }) => {
       const updated = {
         ...prev,
         ...profileData,
-        avatarInitials: profileData.fullName ? profileData.fullName.split(' ').map(n => n[0]).join('').toUpperCase() : 'CL'
+        avatarInitials: profileData.fullName ? profileData.fullName.split(' ').map(n => n[0]).join('').toUpperCase() : 'SC'
       };
       localStorage.setItem('cc_user', JSON.stringify(updated));
       return updated;
@@ -433,15 +480,11 @@ export const ClientProvider = ({ children }) => {
       assignedAudits,
       clientAudits,
       currentAudit,
-      currentAuditObj,
       controls,
       findings,
       allControls,
       activities,
       settings,
-      rulebook,
-      isLoadingAudits,
-      isLoadingControls,
       login,
       logout,
       switchAudit,
@@ -450,9 +493,7 @@ export const ClientProvider = ({ children }) => {
       addReplyToFinding,
       updateProfile,
       updatePreferences,
-      fetchClientAudits,
-      fetchAuditControls,
-      fetchRulebook,
+      fetchClientData,
     }}>
       {children}
     </ClientContext.Provider>

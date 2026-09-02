@@ -28,10 +28,18 @@ export const changePassword = async (userId, current_password, new_password) => 
   return data;
 };
 
+// ─── Master Controls Endpoints ──────────────────────────────────────
+
+export const getControls = async () => {
+  const { data } = await axiosClient.get('/controls');
+  return data;
+};
+
 // Default export for convenience
 const api = {
   login,
   changePassword,
+  getControls,
 };
 
 export default api;

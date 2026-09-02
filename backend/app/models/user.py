@@ -39,4 +39,4 @@ class User(Base):
     # Relationships
     company = relationship("Company", back_populates="users")
     assigned_audit_controls = relationship("AuditControl", back_populates="user")
-    uploaded_evidence_files = relationship("EvidenceFiles", back_populates="user")
+    uploaded_evidence_items = relationship("EvidenceItem", back_populates="user")

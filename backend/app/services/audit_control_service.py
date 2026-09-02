@@ -76,9 +76,9 @@ def get_audit_control_by_id(db: Session, audit_control_id: str):
 
 
 def get_audit_controls_by_framework(db: Session, framework_id: str):
-    return db.query(AuditControl).filter(
+    return db.query(AuditControl).join(Controls, AuditControl.control_id == Controls.id).filter(
         AuditControl.framework_id == framework_id
-    ).options(joinedload(AuditControl.control)).all()
+    ).options(joinedload(AuditControl.control)).order_by(Controls.created_at.asc()).all()
 
 
 def update_audit_control(

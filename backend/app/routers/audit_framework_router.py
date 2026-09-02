@@ -12,6 +12,7 @@ from app.schemas.audit_framework_schema import (
 from app.services.audit_framework_service import (
     create_audit_framework,
     get_all_audit_frameworks,
+    get_audit_frameworks_by_company,
     get_audit_framework_by_id,
     update_audit_framework,
     delete_audit_framework,
@@ -36,6 +37,14 @@ def fetch_audit_frameworks(
     db: Session = Depends(get_db)
 ):
     return get_all_audit_frameworks(db)
+
+
+@router.get("/company/{company_id}", response_model=list[AuditFrameworkResponse])
+def fetch_audit_frameworks_by_company(
+    company_id: str,
+    db: Session = Depends(get_db)
+):
+    return get_audit_frameworks_by_company(db, company_id)
 
 
 @router.get("/{audit_framework_id}", response_model=AuditFrameworkResponse)

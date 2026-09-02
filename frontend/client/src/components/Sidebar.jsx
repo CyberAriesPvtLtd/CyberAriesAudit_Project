@@ -60,6 +60,7 @@ export default function Sidebar({ isOpen, toggleSidebar }) {
               <NavLink
                 key={item.path}
                 to={item.path}
+                state={item.path === '/my-audits' ? { viewMode: 'list' } : undefined}
                 className={({ isActive }) => 
                   isActive ? "sidebar-item active" : "sidebar-item"
                 }

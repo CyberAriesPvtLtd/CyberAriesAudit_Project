@@ -14,42 +14,39 @@ import {
   FRAMEWORK_CATEGORIES,
   initialFrameworkRules
 } from '../data/frameworkRulesData';
+import * as api from '../services/api';
 
 export default function FrameworkManagement({ isReadOnly = true }) {
-  // Read shared framework rules from localStorage (uploaded/updated by Admin)
-  const [rulebook, setRulebook] = useState(() => {
-    const saved = localStorage.getItem('cyberaries_framework_rules') || localStorage.getItem('cyberaries_rulebook');
-    if (saved) {
-      try {
-        const parsed = JSON.parse(saved);
-        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].frameworkRules) {
-          return parsed;
-        }
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    return initialFrameworkRules;
-  });
+  const [rulebook, setRulebook] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  // Sync state if localStorage changes
   useEffect(() => {
-    const handleStorageChange = () => {
-      const saved = localStorage.getItem('cyberaries_framework_rules') || localStorage.getItem('cyberaries_rulebook');
-      if (saved) {
-        try {
-          const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].frameworkRules) {
-            setRulebook(parsed);
-          }
-        } catch (e) {
-          console.error(e);
-        }
+    const fetchAllControls = async () => {
+      try {
+        setLoading(true);
+        const data = await api.getControls();
+        const mappedData = data.map(c => ({
+          id: c.id,
+          frameworkRules: (c.framework_rules || []).join(', '),
+          frameworkRulesList: c.framework_rules || [],
+          controlDomain: c.control_domain || '',
+          frameworkType: c.audit_type || '',
+          frameworkCategory: c.audit_category || '',
+          frameworkSubcategory: c.audit_subcategory || '',
+          description: c.control_desc || '',
+          primaryDocuments: c.primary_evidence || [],
+          secondaryDocuments: c.secondary_evidence || [],
+          lastUpdated: c.created_at
+        }));
+        setRulebook(mappedData);
+      } catch (err) {
+        console.error('Failed to fetch controls:', err);
+        setToastMessage('Failed to load framework rules from server.');
+      } finally {
+        setLoading(false);
       }
     };
-
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
+    fetchAllControls();
   }, []);
 
   // Detail Modal States for Table Rows
@@ -111,8 +108,12 @@ export default function FrameworkManagement({ isReadOnly = true }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', maxWidth: '160px', overflow: 'hidden' }}>
         <span
           className={`compact-doc-chip ${isPrimary ? 'primary-chip' : 'secondary-chip'}`}
-          title={firstDoc}
-          style={{ maxWidth: '110px', flexShrink: 1 }}
+          title="Click to view documents"
+          onClick={(e) => {
+            e.stopPropagation();
+            setViewingDocumentsRow(row);
+          }}
+          style={{ maxWidth: '110px', flexShrink: 1, cursor: 'pointer' }}
         >
           <FileText size={11} style={{ flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstDoc}</span>
@@ -145,19 +146,38 @@ export default function FrameworkManagement({ isReadOnly = true }) {
       sortable: true,
       width: '210px',
       cell: (row) => {
-        const fullText = row.frameworkRules || '';
-        const parts = fullText.split(':');
-        const code = parts[0]?.trim();
-        const name = parts.length > 1 ? parts.slice(1).join(':').trim() : fullText;
+        const rulesArray = row.frameworkRulesList || [];
+        
+        if (rulesArray.length === 0) {
+          return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>;
+        }
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '195px', overflow: 'hidden' }}>
-            <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {code}
-            </span>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>
-              {name}
-            </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '195px' }}>
+            {rulesArray.map((rule, idx) => (
+              <span 
+                key={idx} 
+                title={rule}
+                style={{
+                  backgroundColor: 'rgba(99,102,241,0.08)',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  color: 'var(--accent-primary, #6366F1)',
+                  padding: '2px 7px',
+                  borderRadius: '4px',
+                  fontSize: '11.5px',
+                  fontFamily: 'monospace',
+                  fontWeight: '700',
+                  letterSpacing: '0.03em',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'inline-block',
+                  maxWidth: '190px',
+                }}
+              >
+                {rule}
+              </span>
+            ))}
           </div>
         );
       }
@@ -269,21 +289,27 @@ export default function FrameworkManagement({ isReadOnly = true }) {
   // ----------------------------------------------------
   // SEARCH & FILTERS
   // ----------------------------------------------------
+  // SEARCH & FILTERS (Dynamic)
+  // ----------------------------------------------------
+  const dynamicFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))];
+  const dynamicControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))];
+  const dynamicFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))];
+
   const filterOptions = [
     {
       label: 'Framework Type',
       key: 'frameworkType',
-      options: FRAMEWORK_TYPES
+      options: dynamicFrameworkTypes
     },
     {
       label: 'Control Domain',
       key: 'controlDomain',
-      options: CONTROL_DOMAINS
+      options: dynamicControlDomains
     },
     {
       label: 'Framework Category',
       key: 'frameworkCategory',
-      options: FRAMEWORK_CATEGORIES
+      options: dynamicFrameworkCategories
     }
   ];
 

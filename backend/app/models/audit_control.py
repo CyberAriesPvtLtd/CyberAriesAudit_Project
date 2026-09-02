@@ -22,4 +22,4 @@ class AuditControl(Base):
     user = relationship("User",back_populates="assigned_audit_controls")
     audit_framework = relationship("AuditFramework",back_populates="audit_controls")
     control = relationship("Controls",back_populates="audit_controls")
-    evidence_files = relationship("EvidenceFiles",back_populates="audit_control")
+    evidence_links = relationship("AuditControlEvidence",back_populates="audit_control")

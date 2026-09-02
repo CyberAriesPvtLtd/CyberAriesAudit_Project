@@ -39,7 +39,7 @@ function ProtectedLayout({ children }) {
         <TopNav toggleSidebar={toggleSidebar} />
 
         {/* Dynamic Route Content */}
-        <main style={{ flexGrow: 1, display: 'flex', flexDirection: 'column' }}>
+        <main style={{ flexGrow: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
           {children}
         </main>
       </div>
@@ -60,103 +60,103 @@ function AppRoutes() {
   return (
     <Routes>
       {/* Public Login Route */}
-      <Route 
-        path="/login" 
+      <Route
+        path="/login"
         element={
           <PublicRoute>
             <Login />
           </PublicRoute>
-        } 
+        }
       />
 
       {/* Protected Routes */}
-      <Route 
-        path="/dashboard" 
+      <Route
+        path="/dashboard"
         element={
           <ProtectedLayout>
             <Dashboard />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/my-audits" 
+      <Route
+        path="/my-audits"
         element={
           <ProtectedLayout>
             <MyAudits />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/framework-management" 
+      <Route
+        path="/framework-management"
         element={
           <ProtectedLayout>
             <FrameworkManagement />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/framework" 
+      <Route
+        path="/framework"
         element={
           <ProtectedLayout>
             <FrameworkManagement />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/rulebook" 
+      <Route
+        path="/rulebook"
         element={
           <ProtectedLayout>
             <FrameworkManagement />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/control-details" 
+      <Route
+        path="/control-details"
         element={
           <ProtectedLayout>
             <ControlDetails />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/findings" 
+      <Route
+        path="/findings"
         element={
           <ProtectedLayout>
             <Findings />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/audit-status" 
+      <Route
+        path="/audit-status"
         element={
           <ProtectedLayout>
             <AuditStatus />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/final-report" 
+      <Route
+        path="/final-report"
         element={
           <ProtectedLayout>
             <FinalReport />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/profile" 
+      <Route
+        path="/profile"
         element={
           <ProtectedLayout>
             <Profile />
           </ProtectedLayout>
-        } 
+        }
       />
-      <Route 
-        path="/settings" 
+      <Route
+        path="/settings"
         element={
           <ProtectedLayout>
             <Settings />
           </ProtectedLayout>
-        } 
+        }
       />
 
       {/* Fallback redirect */}

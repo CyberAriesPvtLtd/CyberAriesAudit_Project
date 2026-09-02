@@ -317,6 +317,7 @@ body {
   flex-grow: 1;
   max-width: 1600px;
   width: 100%;
+  min-width: 0;
   margin: 0 auto;
 }
 
@@ -452,14 +453,15 @@ body {
 .toolbar-left {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   flex-grow: 1;
-  max-width: 550px;
 }
 
 .table-search-wrapper {
   position: relative;
   flex-grow: 1;
+  min-width: 180px;
 }
 
 .table-search-input {
@@ -512,6 +514,7 @@ body {
 
 .excel-table {
   width: 100%;
+  min-width: max-content;
   border-collapse: collapse;
   text-align: left;
   font-size: 13.5px;

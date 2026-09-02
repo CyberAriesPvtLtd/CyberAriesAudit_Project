@@ -65,6 +65,20 @@ def get_all_audit_frameworks(db: Session):
     return db.query(AuditFramework).all()
 
 
+def get_audit_frameworks_by_company(db: Session, company_id: str):
+    """Return all audit frameworks assigned to a specific company."""
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    return (
+        db.query(AuditFramework)
+        .filter(AuditFramework.company_id == company_id)
+        .order_by(AuditFramework.created_at.desc())
+        .all()
+    )
+
+
 def get_audit_framework_by_id(db: Session, audit_framework_id: str):
 
     audit_framework = db.query(AuditFramework).filter(

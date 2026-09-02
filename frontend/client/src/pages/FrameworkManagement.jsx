@@ -15,10 +15,41 @@ import {
   initialFrameworkRules
 } from '../data/frameworkRulesData';
 import { useClient } from '../context/ClientContext';
+import * as api from '../services/api';
 
 export default function FrameworkManagement({ isReadOnly = true }) {
-  const { rulebook } = useClient();
+  const { currentUser } = useClient();
+  const [rulebook, setRulebook] = useState([]);
+  const [loading, setLoading] = useState(true);
 
+  useEffect(() => {
+    const fetchAllControls = async () => {
+      try {
+        setLoading(true);
+        const data = await api.getControls();
+        const mappedData = data.map(c => ({
+          id: c.id,
+          frameworkRules: (c.framework_rules || []).join(', '),
+          frameworkRulesList: c.framework_rules || [],
+          controlDomain: c.control_domain || '',
+          frameworkType: c.audit_type || '',
+          frameworkCategory: c.audit_category || '',
+          frameworkSubcategory: c.audit_subcategory || '',
+          description: c.control_desc || '',
+          primaryDocuments: c.primary_evidence || [],
+          secondaryDocuments: c.secondary_evidence || [],
+          lastUpdated: c.created_at
+        }));
+        setRulebook(mappedData);
+      } catch (err) {
+        console.error('Failed to fetch controls:', err);
+        setToastMessage('Failed to load framework rules from server.');
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchAllControls();
+  }, []);
   // Detail Modal States for Table Rows
   const [viewingDescriptionRow, setViewingDescriptionRow] = useState(null);
   const [viewingDocumentsRow, setViewingDocumentsRow] = useState(null);
@@ -128,17 +159,21 @@ export default function FrameworkManagement({ isReadOnly = true }) {
               <span 
                 key={idx} 
                 title={rule}
-                style={{ 
-                  backgroundColor: 'var(--bg-secondary)',
-                  border: '1px solid var(--border-color)',
-                  color: 'var(--text-primary)',
-                  padding: '2px 6px',
+                style={{
+                  backgroundColor: 'rgba(99,102,241,0.08)',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  color: 'var(--accent-primary, #6366F1)',
+                  padding: '2px 7px',
                   borderRadius: '4px',
-                  fontSize: '12px',
+                  fontSize: '11.5px',
                   fontFamily: 'monospace',
+                  fontWeight: '700',
+                  letterSpacing: '0.03em',
                   whiteSpace: 'nowrap',
                   overflow: 'hidden',
-                  textOverflow: 'ellipsis'
+                  textOverflow: 'ellipsis',
+                  display: 'inline-block',
+                  maxWidth: '190px',
                 }}
               >
                 {rule}
@@ -253,12 +288,12 @@ export default function FrameworkManagement({ isReadOnly = true }) {
   ];
 
   // ----------------------------------------------------
-  // SEARCH & FILTERS
+  // SEARCH & FILTERS (Dynamic)
   // ----------------------------------------------------
-  const dynamicFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))].sort();
-  const dynamicControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))].sort();
-  const dynamicFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))].sort();
-  const dynamicFrameworkSubcategories = [...new Set(rulebook.map(r => r.frameworkSubcategory).filter(Boolean))].sort();
+  const dynamicFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))];
+  const dynamicControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))];
+  const dynamicFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))];
+  const dynamicFrameworkSubcategories = [...new Set(rulebook.map(r => r.frameworkSubcategory).filter(Boolean))];
 
   const filterOptions = [
     {

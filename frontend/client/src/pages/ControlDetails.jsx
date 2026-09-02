@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useClient } from '../context/ClientContext';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, FileText, Download, Trash2, Eye, AlertTriangle, ShieldCheck, FileCheck } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, Download, Trash2, Eye, AlertTriangle, ShieldCheck, FileCheck, Loader } from 'lucide-react';
+import { getEvidenceDownloadUrl } from '../services/api';
 import Modal from '../components/Modal';
 
 export default function ControlDetails() {
@@ -19,38 +20,34 @@ export default function ControlDetails() {
   // Parse required deliverables from comma-separated list
   const requirements = control ? control.requiredEvidence.split(',').map(s => s.trim()) : [];
 
-  // Multi-file uploaded evidence state
-  const [uploadedFiles, setUploadedFiles] = useState(() => {
-    if (!control) return [];
-    const saved = localStorage.getItem(`cc_uploaded_files_${control.id}`);
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        console.error(e);
-      }
-    }
-    // Fallback: If control already has a mock file, initialize with it
-    if (control.evidenceFile) {
-      return [{
-        name: control.evidenceFile,
-        size: control.evidenceSize || '1.4 MB',
-        date: control.evidenceDate || new Date().toISOString().split('T')[0],
-        type: control.evidenceFile.split('.').pop().toUpperCase(),
-        uploadedBy: currentUser?.fullName || 'Sarah Connor',
-        status: 'Uploaded',
-        requirement: requirements[0] || 'Deliverable'
-      }];
-    }
-    return [];
-  });
+  // ─── Uploaded files state ───────────────────────────────────────
+  // IMPORTANT: We derive the initial state from the control's evidence
+  // data (which comes from the backend via ClientContext). We do NOT
+  // also persist to localStorage, which was causing the "duplicate row"
+  // bug — the file appeared once from localStorage and once from the
+  // context's control.evidenceFile.
+  const buildFilesFromControl = () => {
+    if (!control || !control.evidenceFiles) return [];
+    return control.evidenceFiles.map((file, idx) => ({
+      name: file.name,
+      size: file.size,
+      date: file.date,
+      type: file.type,
+      uploadedBy: file.uploadedBy,
+      status: file.status,
+      requirement: requirements[idx] || 'Deliverable',
+      evidenceItemId: file.evidenceItemId,
+    }));
+  };
 
-  // Sync uploaded files list to localStorage
+  const [uploadedFiles, setUploadedFiles] = useState(buildFilesFromControl);
+
+  // Sync from control whenever it changes (e.g. after a fresh fetch)
   useEffect(() => {
     if (control) {
-      localStorage.setItem(`cc_uploaded_files_${control.id}`, JSON.stringify(uploadedFiles));
+      setUploadedFiles(buildFilesFromControl());
     }
-  }, [uploadedFiles, control?.id]);
+  }, [control?.evidenceFiles]);
 
   // States for upload workflow
   const [dragActive, setDragActive] = useState(false);
@@ -60,6 +57,8 @@ export default function ControlDetails() {
   const [errorMsg, setErrorMsg] = useState('');
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewFile, setPreviewFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Track which requirement is being uploaded to (null if generic drag & drop)
   const [activeReqForUpload, setActiveReqForUpload] = useState(null);
@@ -119,8 +118,7 @@ export default function ControlDetails() {
     }
   };
 
-  // Process and validate upload
-  const processFile = (file) => {
+  const processFile = async (file) => {
     setErrorMsg('');
     setSuccessNotification(false);
 
@@ -143,40 +141,34 @@ export default function ControlDetails() {
     setUploading(true);
     setUploadProgress(0);
 
-    // Simulate progress bar loading animation
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setTimeout(() => {
-            const reqToAssign = activeReqForUpload || missingRequirements[0] || 'Additional Evidence';
+    const result = await uploadEvidence(control.id, file, (pct) => {
+      setUploadProgress(pct);
+    });
 
-            const newFile = {
-              name: file.name,
-              size: formatBytes(file.size),
-              date: new Date().toISOString().split('T')[0],
-              type: extension.toUpperCase(),
-              uploadedBy: currentUser?.fullName || 'Sarah Connor',
-              status: 'Uploaded',
-              requirement: reqToAssign
-            };
+    setUploading(false);
 
-            setUploadedFiles(prevFiles => {
-              const updated = [...prevFiles, newFile];
-              // Sync with global client context state
-              uploadEvidence(control.id, file.name, formatBytes(file.size));
-              return updated;
-            });
+    if (!result.success) {
+      setErrorMsg(result.error || 'Upload failed. Please try again.');
+      setActiveReqForUpload(null);
+      return;
+    }
 
-            setUploading(false);
-            setSuccessNotification(true);
-            setActiveReqForUpload(null);
-          }, 300);
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 100);
+    const reqToAssign = activeReqForUpload || missingRequirements[0] || 'Additional Evidence';
+
+    const newFile = {
+      name: file.name,
+      size: formatBytes(file.size),
+      date: new Date().toISOString().split('T')[0],
+      type: extension.toUpperCase(),
+      uploadedBy: currentUser?.fullName || 'Client',
+      status: 'Uploaded',
+      requirement: reqToAssign,
+      evidenceItemId: result.evidenceItemId,
+    };
+
+    setUploadedFiles(prevFiles => [...prevFiles, newFile]);
+    setSuccessNotification(true);
+    setActiveReqForUpload(null);
   };
 
   const triggerFileSelect = () => {
@@ -188,24 +180,46 @@ export default function ControlDetails() {
     triggerFileSelect();
   };
 
-  const handleDeleteFile = (fileNameToDelete) => {
-    const updated = uploadedFiles.filter(f => f.name !== fileNameToDelete);
+  const handleDeleteFile = (fileItem) => {
+    const updated = uploadedFiles.filter(f => f.evidenceItemId !== fileItem.evidenceItemId);
     setUploadedFiles(updated);
     setSuccessNotification(false);
-
-    if (updated.length > 0) {
-      // Keep context synchronized with the last remaining file name and size
-      const lastFile = updated[updated.length - 1];
-      uploadEvidence(control.id, lastFile.name, lastFile.size);
-    } else {
-      // Clear context evidence status
-      deleteEvidence(control.id);
-    }
+    deleteEvidence(control.id, fileItem.evidenceItemId);
   };
 
-  const handlePreviewFile = (fileItem) => {
+  // ─── Preview: fetch a real presigned URL from MinIO ─────────────
+  const handlePreviewFile = async (fileItem) => {
     setPreviewFile(fileItem);
     setPreviewOpen(true);
+    setPreviewUrl(null);
+    setPreviewLoading(true);
+
+    if (fileItem.evidenceItemId) {
+      try {
+        const result = await getEvidenceDownloadUrl(fileItem.evidenceItemId);
+        setPreviewUrl(result.download_url);
+      } catch (err) {
+        console.error('[CyberAries] Failed to get preview URL:', err.message);
+      }
+    }
+    setPreviewLoading(false);
+  };
+
+  // ─── Download: fetch a presigned URL and trigger browser download ─
+  const handleDownloadFile = async (fileItem) => {
+    if (!fileItem.evidenceItemId) {
+      alert('No backend reference for this file. Download unavailable.');
+      return;
+    }
+
+    try {
+      const result = await getEvidenceDownloadUrl(fileItem.evidenceItemId);
+      // Open the presigned URL in a new tab — the browser will download it
+      window.open(result.download_url, '_blank');
+    } catch (err) {
+      console.error('[CyberAries] Download failed:', err.message);
+      alert('Failed to generate download link. Please try again.');
+    }
   };
 
   const getStatusBadgeClass = (status) => {
@@ -215,6 +229,13 @@ export default function ControlDetails() {
       case 'Action Required': return 'badge badge-action-required';
       default: return 'badge';
     }
+  };
+
+  // Determine if a file type can be rendered inline in the preview modal
+  const isPreviewable = (mimeOrExt) => {
+    if (!mimeOrExt) return false;
+    const lower = mimeOrExt.toLowerCase();
+    return ['pdf', 'png', 'jpg', 'jpeg', 'image/png', 'image/jpeg', 'application/pdf'].includes(lower);
   };
 
   return (
@@ -303,12 +324,12 @@ export default function ControlDetails() {
                       <th>Uploaded Date</th>
                       <th>Uploaded By</th>
                       <th>Status</th>
-                      <th style={{ width: '220px' }}>Actions</th>
+                      <th style={{ width: '160px' }}>Actions</th>
                     </tr>
                   </thead>
                   <tbody>
                     {uploadedFiles.map((file, idx) => (
-                      <tr key={idx}>
+                      <tr key={`${file.name}-${idx}`}>
                         <td style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
                           <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                             <FileText size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
@@ -334,33 +355,36 @@ export default function ControlDetails() {
                           </span>
                         </td>
                         <td>
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '6px 8px', fontSize: '12px' }}
+                          <div style={{ display: 'flex', gap: '8px', whiteSpace: 'nowrap' }}>
+                            <button 
+                              className="btn btn-secondary" 
+                              style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               onClick={() => handlePreviewFile(file)}
+                              title="Preview"
                             >
-                              <Eye size={12} /> Preview
+                              <Eye size={16} />
                             </button>
 
                             <button
                               className="btn btn-secondary"
-                              style={{ padding: '6px 8px', fontSize: '12px' }}
-                              onClick={() => alert(`Downloading: ${file.name}`)}
+                              style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                              onClick={() => handleDownloadFile(file)}
+                              title="Download"
                             >
-                              <Download size={12} /> Download
+                              <Download size={16} />
                             </button>
 
                             <button
                               className="btn btn-secondary"
-                              style={{ padding: '6px 8px', fontSize: '12px', color: 'var(--primary)' }}
+                              style={{ padding: '8px', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
                               onClick={() => {
                                 if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
-                                  handleDeleteFile(file.name);
+                                  handleDeleteFile(file);
                                 }
                               }}
+                              title="Delete"
                             >
-                              <Trash2 size={12} /> Delete
+                              <Trash2 size={16} />
                             </button>
                           </div>
                         </td>
@@ -459,24 +483,72 @@ export default function ControlDetails() {
         </div>
       </div>
 
-      {/* Mock Document Preview Modal */}
+      {/* Real Document Preview Modal */}
       <Modal
         isOpen={previewOpen}
         title={`File Preview: ${previewFile?.name}`}
-        onClose={() => setPreviewOpen(false)}
+        onClose={() => { setPreviewOpen(false); setPreviewUrl(null); }}
       >
-        <div style={{ backgroundColor: '#F8F9FA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '28px', minHeight: '300px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
-          <FileText size={48} style={{ color: 'var(--primary)', marginBottom: '16px' }} />
-          <h4 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)', marginBottom: '8px' }}>{previewFile?.name}</h4>
-          <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '360px', lineHeight: '1.5', margin: '0 auto' }}>
-            <strong>Requirement Mapping:</strong> {previewFile?.requirement}<br />
-            <strong>Size:</strong> {previewFile?.size} | <strong>Uploaded On:</strong> {previewFile?.date}<br /><br />
-            <span style={{ fontStyle: 'italic' }}>[Mock Document Viewer]</span><br />
-            This is a secure preview of the file submitted for {control.id}. The content is verified for compliance checking.
-          </p>
+        <div style={{ backgroundColor: '#F8F9FA', border: '1px solid var(--border-color)', borderRadius: 'var(--radius-md)', padding: '16px', minHeight: '400px', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center' }}>
+          {previewLoading ? (
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <Loader size={32} style={{ color: 'var(--primary)', animation: 'spin 1s linear infinite' }} />
+              <span style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>Loading preview...</span>
+            </div>
+          ) : previewUrl && isPreviewable(previewFile?.type) ? (
+            // Render PDF or Image inline
+            previewFile?.type === 'PDF' ? (
+              <iframe
+                src={previewUrl}
+                title={previewFile?.name}
+                style={{ width: '100%', height: '500px', border: 'none', borderRadius: 'var(--radius-sm)' }}
+              />
+            ) : (
+              <img
+                src={previewUrl}
+                alt={previewFile?.name}
+                style={{ maxWidth: '100%', maxHeight: '500px', borderRadius: 'var(--radius-sm)', objectFit: 'contain' }}
+              />
+            )
+          ) : previewUrl ? (
+            // File type not previewable inline — offer download link
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <FileText size={48} style={{ color: 'var(--primary)' }} />
+              <h4 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>{previewFile?.name}</h4>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '360px', lineHeight: '1.5' }}>
+                This file type ({previewFile?.type}) cannot be previewed inline. Use the button below to open it in a new tab.
+              </p>
+              <button
+                className="btn btn-primary"
+                style={{ padding: '8px 16px', fontSize: '13px' }}
+                onClick={() => window.open(previewUrl, '_blank')}
+              >
+                <Download size={14} /> Open in New Tab
+              </button>
+            </div>
+          ) : (
+            // No backend reference — show info card
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+              <FileText size={48} style={{ color: 'var(--primary)' }} />
+              <h4 style={{ fontSize: '15px', fontWeight: '700', color: 'var(--text-primary)' }}>{previewFile?.name}</h4>
+              <p style={{ fontSize: '12px', color: 'var(--text-secondary)', maxWidth: '360px', lineHeight: '1.5' }}>
+                <strong>Requirement Mapping:</strong> {previewFile?.requirement}<br />
+                <strong>Size:</strong> {previewFile?.size} | <strong>Uploaded On:</strong> {previewFile?.date}<br /><br />
+                Preview is not available for this file. It may be mock data or the backend is unreachable.
+              </p>
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px', marginTop: '16px' }}>
-          <button className="btn btn-secondary" onClick={() => setPreviewOpen(false)}>Close Preview</button>
+          {previewUrl && (
+            <button
+              className="btn btn-primary"
+              onClick={() => window.open(previewUrl, '_blank')}
+            >
+              <Download size={14} /> Download
+            </button>
+          )}
+          <button className="btn btn-secondary" onClick={() => { setPreviewOpen(false); setPreviewUrl(null); }}>Close Preview</button>
         </div>
       </Modal>
     </div>

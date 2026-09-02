@@ -9,6 +9,8 @@ export default function MyAudits() {
   const [viewMode, setViewMode] = useState(location.state?.viewMode || 'list'); // 'list' or 'controls'
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedDomain, setSelectedDomain] = useState('All Domains');
+  const [selectedCategory, setSelectedCategory] = useState('All Categories');
+  const [selectedSubcategory, setSelectedSubcategory] = useState('All Subcategories');
   const [selectedStatus, setSelectedStatus] = useState('All Statuses');
   const [filteredControls, setFilteredControls] = useState([]);
 
@@ -36,16 +38,28 @@ export default function MyAudits() {
       result = result.filter(c => c.domain === selectedDomain);
     }
 
+    // Filter by category
+    if (selectedCategory !== 'All Categories') {
+      result = result.filter(c => c.frameworkCategory === selectedCategory);
+    }
+
+    // Filter by subcategory
+    if (selectedSubcategory !== 'All Subcategories') {
+      result = result.filter(c => c.frameworkSubcategory === selectedSubcategory);
+    }
+
     // Filter by status
     if (selectedStatus !== 'All Statuses') {
       result = result.filter(c => c.status === selectedStatus);
     }
 
     setFilteredControls(result);
-  }, [controls, searchTerm, selectedDomain, selectedStatus]);
+  }, [controls, searchTerm, selectedDomain, selectedCategory, selectedSubcategory, selectedStatus]);
 
   // Unique domains list for filter select
   const domainsList = ['All Domains', ...new Set(controls.map(c => c.domain).filter(Boolean))];
+  const categoriesList = ['All Categories', ...new Set(controls.map(c => c.frameworkCategory).filter(Boolean))];
+  const subcategoriesList = ['All Subcategories', ...new Set(controls.map(c => c.frameworkSubcategory).filter(Boolean))];
   const statusesList = ['All Statuses', 'Completed', 'In Progress', 'Action Required'];
 
   const getStatusBadgeClass = (status) => {
@@ -60,7 +74,7 @@ export default function MyAudits() {
   const getAuditStats = (auditObj) => {
     const list = allControls[auditObj.audit_name] || [];
     const total = list.length;
-    const completed = list.filter(c => c.status === 'Completed').length;
+    const completed = list.filter(c => c.status === 'Completed' || c.status === 'Submitted' || c.evidenceFile || (c.evidenceFiles && c.evidenceFiles.length > 0)).length;
     const pct = total ? Math.round((completed / total) * 100) : 0;
     
     let status = auditObj.status || 'Pending';
@@ -281,6 +295,28 @@ export default function MyAudits() {
               ))}
             </select>
 
+            {/* Filter Category */}
+            <select 
+              className="table-filter-select"
+              value={selectedCategory}
+              onChange={(e) => setSelectedCategory(e.target.value)}
+            >
+              {categoriesList.map(cat => (
+                <option key={cat} value={cat}>{cat}</option>
+              ))}
+            </select>
+
+            {/* Filter Subcategory */}
+            <select 
+              className="table-filter-select"
+              value={selectedSubcategory}
+              onChange={(e) => setSelectedSubcategory(e.target.value)}
+            >
+              {subcategoriesList.map(sub => (
+                <option key={sub} value={sub}>{sub}</option>
+              ))}
+            </select>
+
             {/* Filter Status */}
             <select 
               className="table-filter-select"
@@ -316,7 +352,7 @@ export default function MyAudits() {
             <tbody>
               {filteredControls.map((ctrl) => {
                 const rulesArray = ctrl.frameworkRulesList || (ctrl.standard ? ctrl.standard.split(', ').filter(Boolean) : []);
-                const isCompleted = ctrl.status === 'Completed' || ctrl.status === 'Submitted' || ctrl.evidenceFile;
+                const isCompleted = ctrl.status === 'Completed' || ctrl.status === 'Submitted' || ctrl.evidenceFile || (ctrl.evidenceFiles && ctrl.evidenceFiles.length > 0);
                 const displayStatus = isCompleted ? 'Completed' : 'Incomplete';
                 
                 return (
@@ -356,7 +392,10 @@ export default function MyAudits() {
                     {renderDomainBadge(ctrl.domain)}
                   </td>
                   <td style={{ fontSize: '13px', color: 'var(--text-secondary)' }}>
-                    {ctrl.frameworkCategory || '—'}
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)' }}>{ctrl.frameworkCategory || '—'}</span>
+                      {ctrl.frameworkSubcategory && <span style={{ fontSize: '11.5px' }}>{ctrl.frameworkSubcategory}</span>}
+                    </div>
                   </td>
                   <td>
                     <span className={displayStatus === 'Completed' ? 'badge-completed' : 'badge-pending'} style={{ padding: '4px 8px', borderRadius: '12px', fontSize: '12px', fontWeight: '500', display: 'inline-block' }}>

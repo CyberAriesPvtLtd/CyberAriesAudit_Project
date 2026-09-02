@@ -43,6 +43,7 @@ class AuditFrameworkUpdate(BaseModel):
     audit_subcategory: Optional[str] = None
     audit_name: Optional[str] = None
     target_fy: Optional[str] = None
+    status: Optional[str] = None
     assigned_auditors: Optional[List[str]] = None
 
 

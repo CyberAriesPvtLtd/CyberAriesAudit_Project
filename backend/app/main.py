@@ -13,7 +13,9 @@ from app.models import (
     AuditFramework,
     Controls,
     AuditControl,
-    EvidenceFiles,
+    EvidenceItem,
+    AuditControlEvidence,
+    ControlCrossReference,
 )
 
 # Import Routers
@@ -37,6 +39,11 @@ with SessionLocal() as db:
     # by a developer are picked up on every restart.
     print("[CyberAries] Syncing controls from Excel files...")
     seed_controls(db)
+
+from app.services.storage_service import ensure_bucket_exists
+print("[CyberAries] Ensuring MinIO bucket exists...")
+ensure_bucket_exists()
+
 
 app = FastAPI(
     title="Aries Audit Backend",

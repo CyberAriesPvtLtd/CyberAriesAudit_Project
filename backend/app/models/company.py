@@ -20,3 +20,4 @@ class Company(Base):
         "AuditFramework",
         back_populates="company"
     )
+    evidence_items = relationship("EvidenceItem", back_populates="company")
