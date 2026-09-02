@@ -25,7 +25,7 @@ class User(Base):
     role = Column(SQLEnum(UserRole), nullable=False)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     company_id = Column(
-        String, ForeignKey("company.id"), nullable=True
+        String, ForeignKey("company.id"), nullable=True, index=True
     )
 
     @property
@@ -39,4 +39,4 @@ class User(Base):
     # Relationships
     company = relationship("Company", back_populates="users")
     assigned_audit_controls = relationship("AuditControl", back_populates="user")
-    uploaded_evidence_files = relationship("EvidenceFiles", back_populates="user")
+    uploaded_evidence_items = relationship("EvidenceItem", back_populates="user")

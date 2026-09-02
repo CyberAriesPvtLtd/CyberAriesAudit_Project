@@ -11,7 +11,7 @@ class Company(Base):
 
     id = Column(String(30), primary_key=True, default=generate_company_id)
     company_name = Column(String, unique=True, nullable=False)
-    registration_no = Column(String, nullable=False)
+    registration_no = Column(String, unique=True, nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     users = relationship("User", back_populates="company")
@@ -20,3 +20,4 @@ class Company(Base):
         "AuditFramework",
         back_populates="company"
     )
+    evidence_items = relationship("EvidenceItem", back_populates="company")

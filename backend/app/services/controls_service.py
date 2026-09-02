@@ -38,8 +38,7 @@ def get_all_controls(
         query = query.filter(Controls.audit_subcategory == audit_subcategory)
 
     return query.order_by(
-        Controls.audit_category,
-        Controls.control_id,
+        Controls.created_at.asc()
     ).all()
 
 

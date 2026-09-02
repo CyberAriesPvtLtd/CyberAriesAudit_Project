@@ -1,5 +1,5 @@
 from fastapi import HTTPException
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.models.audit_control import AuditControl
 from app.models.user import User
@@ -57,14 +57,14 @@ def create_audit_control(db: Session, audit_control_data):
 
 
 def get_all_audit_controls(db: Session):
-    return db.query(AuditControl).all()
+    return db.query(AuditControl).options(joinedload(AuditControl.control)).all()
 
 
 def get_audit_control_by_id(db: Session, audit_control_id: str):
 
     audit_control = db.query(AuditControl).filter(
         AuditControl.id == audit_control_id
-    ).first()
+    ).options(joinedload(AuditControl.control)).first()
 
     if not audit_control:
         raise HTTPException(
@@ -73,6 +73,12 @@ def get_audit_control_by_id(db: Session, audit_control_id: str):
         )
 
     return audit_control
+
+
+def get_audit_controls_by_framework(db: Session, framework_id: str):
+    return db.query(AuditControl).join(Controls, AuditControl.control_id == Controls.id).filter(
+        AuditControl.framework_id == framework_id
+    ).options(joinedload(AuditControl.control)).order_by(Controls.created_at.asc()).all()
 
 
 def update_audit_control(
