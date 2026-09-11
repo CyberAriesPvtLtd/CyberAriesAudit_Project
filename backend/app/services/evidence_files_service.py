@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime, timezone
 
 from app.models.evidence_files import EvidenceItem
 from app.models.audit_control_evidence import AuditControlEvidence
@@ -89,9 +90,9 @@ def confirm_evidence_upload(db: Session, evidence_item_id: str, data):
                 cross_refs = db.query(ControlCrossReference).filter(
                     ControlCrossReference.source_control_code == uploaded_control.control_id
                 ).all()
-                
+
                 target_codes = [cr.target_control_code for cr in cross_refs]
-                
+
                 if target_codes:
                     # Find AuditControls in the SAME company that match these target codes
                     matching_audit_controls = (
@@ -104,7 +105,7 @@ def confirm_evidence_upload(db: Session, evidence_item_id: str, data):
                         )
                         .all()
                     )
-                    
+
                     for target_ac in matching_audit_controls:
                         links_created.append(
                             _link_evidence_to_control(
@@ -166,6 +167,18 @@ def get_evidence_for_audit_control(db: Session, audit_control_id: str):
     )
 
 
+def get_evidence_for_multiple_controls(db: Session, audit_control_ids: list[str]):
+    return (
+        db.query(AuditControlEvidence)
+        .options(
+            joinedload(AuditControlEvidence.evidence_item)
+            .joinedload(EvidenceItem.user)
+        )
+        .filter(AuditControlEvidence.audit_control_id.in_(audit_control_ids))
+        .all()
+    )
+
+
 def manually_link_evidence(db: Session, data):
     audit_control = db.query(AuditControl).filter(AuditControl.id == data.audit_control_id).first()
     if not audit_control:
@@ -204,6 +217,11 @@ def update_evidence_item(db: Session, evidence_item_id: str, data):
         raise HTTPException(status_code=404, detail="Evidence Item not found")
 
     update_dict = data.model_dump(exclude_unset=True)
+    
+    if "status" in update_dict and "reviewed_by" in update_dict:
+        if update_dict["status"] in ["Approved", "Rejected"]:
+            evidence.reviewed_at = datetime.now(timezone.utc)
+            
     for key, value in update_dict.items():
         setattr(evidence, key, value)
 
@@ -238,4 +256,16 @@ def get_presigned_download(db: Session, evidence_item_id: str):
         "mime_type": evidence.mime_type,
         "file_size": evidence.file_size,
     }
+
+
+def update_auditor_notes(db: Session, evidence_item_id: str, data):
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_item_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence Item not found")
+
+    evidence.auditor_notes = data.auditor_notes
+
+    db.commit()
+    db.refresh(evidence)
+    return evidence
 

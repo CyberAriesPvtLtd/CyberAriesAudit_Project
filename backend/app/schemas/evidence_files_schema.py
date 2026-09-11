@@ -34,7 +34,15 @@ class EvidenceItemUpdate(BaseModel):
     ai_notes: Optional[str] = None
     auditor_notes: Optional[str] = None
     status: Optional[str] = None
+    reviewed_by: Optional[str] = None
 
+
+class EvidenceItemUserResponse(BaseModel):
+    id: str
+    name: str
+
+    class Config:
+        from_attributes = True
 
 class EvidenceItemResponse(BaseModel):
     id: str
@@ -48,6 +56,9 @@ class EvidenceItemResponse(BaseModel):
     company_id: str
 
     uploaded_by: str
+    user: Optional[EvidenceItemUserResponse] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:

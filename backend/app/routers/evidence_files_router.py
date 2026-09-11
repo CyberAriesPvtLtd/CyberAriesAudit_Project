@@ -23,6 +23,8 @@ from app.services.evidence_files_service import (
     unlink_evidence,
     update_evidence_item,
     delete_evidence_item,
+    update_auditor_notes,
+    get_evidence_for_multiple_controls,
 )
 
 router = APIRouter(
@@ -42,7 +44,6 @@ def presign_evidence_upload(
     storage_key to send back in the confirm step below.
     """
     from fastapi.responses import JSONResponse
-    import traceback
 
     try:
         evidence_item_id, storage_key, upload_url = create_presigned_upload(
@@ -52,7 +53,7 @@ def presign_evidence_upload(
             upload_url=upload_url, storage_key=storage_key, evidence_item_id=evidence_item_id
         )
     except Exception as e:
-        return JSONResponse(status_code=500, content={"detail": str(e), "traceback": traceback.format_exc()})
+        return JSONResponse(status_code=500, content={"detail": str(e)})
 
 
 @router.post("/confirm/{evidence_item_id}")
@@ -97,6 +98,15 @@ def fetch_evidence_for_audit_control(
     return get_evidence_for_audit_control(db, audit_control_id)
 
 
+@router.get("/batch", response_model=list[AuditControlEvidenceResponse])
+def fetch_evidence_batch(
+    audit_control_ids: str,
+    db: Session = Depends(get_db)
+):
+    ids = [x.strip() for x in audit_control_ids.split(",") if x.strip()]
+    return get_evidence_for_multiple_controls(db, ids)
+
+
 @router.post("/link", response_model=AuditControlEvidenceResponse)
 def link_evidence(
     payload: AuditControlEvidenceLink,
@@ -122,6 +132,15 @@ def edit_evidence_item(
     db: Session = Depends(get_db)
 ):
     return update_evidence_item(db, evidence_item_id, payload)
+
+
+@router.put("/{evidence_item_id}/auditor-notes", response_model=EvidenceItemResponse)
+def edit_auditor_notes(
+    evidence_item_id: str,
+    payload: EvidenceItemUpdate,
+    db: Session = Depends(get_db)
+):
+    return update_auditor_notes(db, evidence_item_id, payload)
 
 
 @router.delete("/{evidence_item_id}")
