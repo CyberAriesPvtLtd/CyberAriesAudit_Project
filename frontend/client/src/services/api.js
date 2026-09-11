@@ -10,6 +10,21 @@ const axiosClient = axios.create({
   },
 });
 
+// Attach the JWT token to every request so protected endpoints work.
+axiosClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('cc_token');
+  if (token) {
+    if (config.headers.set) {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
 // ─── Authentication Endpoints ─────────────────────────────────────
 
 export const login = async (username, password) => {
@@ -28,7 +43,28 @@ export const changePassword = async (userId, current_password, new_password) => 
   return data;
 };
 
+// ─── Audit Framework Endpoints ────────────────────────────────────
+
+export const getCompanyAuditFrameworks = async (companyId) => {
+  const { data } = await axiosClient.get(`/audit-framework/company/${companyId}`);
+  return data;
+};
+
+// ─── Audit Control Endpoints ──────────────────────────────────────
+
+export const getAuditControlsByFramework = async (frameworkId) => {
+  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
+  return data;
+};
+
 // ─── Evidence Endpoints ────────────────────────────────────────────
+
+// ─── Master Controls Endpoints ──────────────────────────────────────
+
+export const getControls = async () => {
+  const { data } = await axiosClient.get('/controls');
+  return data;
+};
 
 // Step 1 of upload: ask the backend for a presigned MinIO upload URL.
 export const getPresignedUploadUrl = async (companyId, fileName, mimeType) => {
@@ -76,6 +112,12 @@ export const getEvidenceForAuditControl = async (auditControlId) => {
   return data;
 };
 
+// Get a temporary presigned download URL from MinIO for preview/download.
+export const getEvidenceDownloadUrl = async (evidenceItemId) => {
+  const { data } = await axiosClient.get(`/evidence-files/presign-download/${evidenceItemId}`);
+  return data; // { download_url, file_name, mime_type, file_size }
+};
+
 // Manually attach an existing evidence item to a control (the "reuse"
 // action, when the auto-linker didn't already cover it).
 export const linkEvidenceToControl = async (auditControlId, evidenceItemId, linkedByUser) => {
@@ -99,10 +141,8 @@ export const deleteEvidenceItem = async (evidenceItemId) => {
 
 // Full flow, composed: presign -> upload bytes -> confirm.
 // Returns the same shape as confirmEvidenceUpload's response.
-// Full flow, composed: presign -> upload bytes -> confirm.
-// Returns the same shape as confirmEvidenceUpload's response.
 export const uploadEvidenceFile = async ({
-  file, companyId, uploadedBy, auditControlId, evidenceTypeId, onProgress,
+  file, companyId, uploadedBy, auditControlId, onProgress,
 }) => {
   const { upload_url, storage_key, evidence_item_id } = await getPresignedUploadUrl(
     companyId, file.name, file.type
@@ -115,7 +155,6 @@ export const uploadEvidenceFile = async ({
     storage_key,
     file_size: file.size,
     mime_type: file.type,
-    evidence_type_id: evidenceTypeId || null,
     uploaded_by: uploadedBy,
     company_id: companyId,
     audit_control_id: auditControlId || null,
@@ -126,11 +165,14 @@ export const uploadEvidenceFile = async ({
 const api = {
   login,
   changePassword,
+  getCompanyAuditFrameworks,
+  getAuditControlsByFramework,
   getPresignedUploadUrl,
   uploadFileToStorage,
   confirmEvidenceUpload,
   getCompanyEvidence,
   getEvidenceForAuditControl,
+  getEvidenceDownloadUrl,
   linkEvidenceToControl,
   unlinkEvidence,
   deleteEvidenceItem,

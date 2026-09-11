@@ -1,7 +1,7 @@
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.mutable import MutableList
 from sqlalchemy.dialects.postgresql import ARRAY
-from sqlalchemy import Column, String, Integer, DateTime, Index
+from sqlalchemy import Column, String, DateTime, Index
 from datetime import datetime, timezone
 
 from app.database import Base
@@ -35,10 +35,10 @@ class Controls(Base):
         server_default="{}",
         default=list,
     )
-    create_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     audit_controls = relationship("AuditControl", back_populates="control")
-    evidence_type_links = relationship("ControlsEvidenceType", back_populates="control")
+
     # Convenience for display / exports. Read-only — never write through these.
     @property
     def primary_evidence_text(self) -> str:

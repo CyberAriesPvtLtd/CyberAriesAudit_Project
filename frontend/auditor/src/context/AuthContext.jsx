@@ -1,157 +1,143 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
-import api, { updateEvidenceItemStatus } from '../services/api';
+import api from '../services/api';
 
 const AuthContext = createContext(null);
 
-const defaultAuditsData = {
-  "ABC Technologies": {
-    "ISO 27001": {
-      stats: { assigned: 12, pending: 4, completed: 6, aiReview: 2 },
-      evidence: [
-        { id: '1', fileName: 'ISMS_Manual_v1.pdf', type: 'Document', controlId: 'A.5.1.1', controlName: 'InfoSec Policy', client: 'ABC Technologies', date: '06 Jul 2026', status: 'Pending Review', auditId: 'ISO-27001' },
-        { id: '2', fileName: 'Access_Provisioning_Logs.xlsx', type: 'Spreadsheet', controlId: 'A.9.2.1', controlName: 'Access Control', client: 'ABC Technologies', date: '08 Jul 2026', status: 'Under AI Analysis', auditId: 'ISO-27001' }
-      ],
-      findings: [
-        { id: '1', controlId: 'A.8.1.1', controlName: 'Asset Inventory', risk: 'Medium', status: 'Open', message: 'Asset inventory records are missing owner specifications.' }
-      ],
-      reports: [
-        { id: '1', name: 'ISO 27001 Stage 1 Audit Summary.pdf', period: 'FY 2026', status: 'Draft', date: '2026-07-15' }
-      ],
-      progress: { score: 62, completed: 8, total: 13 }
-    },
-    "SOC 2 Type II": {
-      stats: { assigned: 7, pending: 2, completed: 4, aiReview: 1 },
-      evidence: [
-        { id: '11', fileName: 'Access_Auth_Review_Q1.pdf', type: 'Document', controlId: 'CTRL-AC-01', controlName: 'User Access Authorization', client: 'ABC Technologies', date: '10 Jul 2026', status: 'Approved', auditId: 'SOC2' },
-        { id: '12', fileName: 'Database_KMS_Encryption.png', type: 'Image', controlId: 'CTRL-EN-01', controlName: 'Encryption at Rest', client: 'ABC Technologies', date: '12 Jul 2026', status: 'Pending Review', auditId: 'SOC2' }
-      ],
-      findings: [
-        { id: '11', controlId: 'CTRL-AC-02', controlName: 'MFA Configuration', risk: 'High', status: 'Open', message: 'MFA is not enforced for external console access.' }
-      ],
-      reports: [
-        { id: '11', name: 'SOC 2 Type II Interim Assessment.pdf', period: 'Q2 2026', status: 'Approved', date: '2026-06-30' }
-      ],
-      progress: { score: 57, completed: 4, total: 7 }
-    },
-    "SEBI CSCRF": {
-      stats: { assigned: 4, pending: 0, completed: 4, aiReview: 0 },
-      evidence: [
-        { id: '21', fileName: 'SEBI_CISO_Charter.pdf', type: 'Document', controlId: 'SEBI-GV-01', controlName: 'Security Governance Charter', client: 'ABC Technologies', date: '05 Jul 2026', status: 'Approved', auditId: 'SEBI' }
-      ],
-      findings: [],
-      reports: [
-        { id: '21', name: 'SEBI CSCRF Final Evaluation.pdf', period: 'FY 2025-26', status: 'Approved', date: '2026-07-01' }
-      ],
-      progress: { score: 100, completed: 4, total: 4 }
-    }
-  },
-  "XYZ Finance": {
-    "SOC 2 Type II": {
-      stats: { assigned: 7, pending: 1, completed: 5, aiReview: 1 },
-      evidence: [
-        { id: '31', fileName: 'XYZ_MFA_Settings.png', type: 'Image', controlId: 'CTRL-AC-02', controlName: 'MFA Configuration', client: 'XYZ Finance', date: '05 Jul 2026', status: 'Pending Review', auditId: 'SOC2' }
-      ],
-      findings: [],
-      reports: [],
-      progress: { score: 71, completed: 5, total: 7 }
-    },
-    "SEBI CSCRF": {
-      stats: { assigned: 4, pending: 2, completed: 2, aiReview: 0 },
-      evidence: [
-        { id: '41', fileName: 'VAPT_Scope_Approval.pdf', type: 'Document', controlId: 'SEBI-DE-04', controlName: 'VAPT Testing', client: 'XYZ Finance', date: '08 Jul 2026', status: 'Pending Review', auditId: 'SEBI' }
-      ],
-      findings: [],
-      reports: [],
-      progress: { score: 50, completed: 2, total: 4 }
-    },
-    "RBI Cyber Security": {
-      stats: { assigned: 1, pending: 1, completed: 0, aiReview: 0 },
-      evidence: [],
-      findings: [],
-      reports: [],
-      progress: { score: 0, completed: 0, total: 1 }
-    }
-  },
-  "Nova Logistics": {
-    "ISO 27001": {
-      stats: { assigned: 13, pending: 5, completed: 6, aiReview: 2 },
-      evidence: [
-        { id: '51', fileName: 'Scope_Definition_v1.pdf', type: 'Document', controlId: 'A.5.1', controlName: 'Scope Definitions', client: 'Nova Logistics', date: '10 Jul 2026', status: 'Pending Review', auditId: 'ISO-27001' }
-      ],
-      findings: [],
-      reports: [],
-      progress: { score: 46, completed: 6, total: 13 }
-    },
-    "PCI DSS": {
-      stats: { assigned: 12, pending: 3, completed: 8, aiReview: 1 },
-      evidence: [
-        { id: '61', fileName: 'Cardholder_Data_Flows.png', type: 'Image', controlId: 'PCI-1.1', controlName: 'Network Diagrams', client: 'Nova Logistics', date: '12 Jul 2026', status: 'Approved', auditId: 'PCI' }
-      ],
-      findings: [],
-      reports: [],
-      progress: { score: 66, completed: 8, total: 12 }
-    }
-  },
-  "Quantum Retail": {
-    "PCI DSS": {
-      stats: { assigned: 12, pending: 6, completed: 4, aiReview: 2 },
-      evidence: [],
-      findings: [],
-      reports: [],
-      progress: { score: 33, completed: 4, total: 12 }
-    },
-    "HIPAA": {
-      stats: { assigned: 8, pending: 4, completed: 3, aiReview: 1 },
-      evidence: [],
-      findings: [],
-      reports: [],
-      progress: { score: 37, completed: 3, total: 8 }
-    }
-  },
-  "BioHealth Solutions": {
-    "HIPAA": {
-      stats: { assigned: 8, pending: 2, completed: 5, aiReview: 1 },
-      evidence: [],
-      findings: [],
-      reports: [],
-      progress: { score: 62, completed: 5, total: 8 }
-    },
-    "ISO 27001": {
-      stats: { assigned: 13, pending: 4, completed: 7, aiReview: 2 },
-      evidence: [],
-      findings: [],
-      reports: [],
-      progress: { score: 53, completed: 7, total: 13 }
-    }
-  }
-};
 
-const clientAuditsMapping = {
-  "ABC Technologies": ["ISO 27001", "SOC 2 Type II", "SEBI CSCRF"],
-  "XYZ Finance": ["SOC 2 Type II", "SEBI CSCRF", "RBI Cyber Security"],
-  "Nova Logistics": ["ISO 27001", "PCI DSS"],
-  "Quantum Retail": ["PCI DSS", "HIPAA"],
-  "BioHealth Solutions": ["HIPAA", "ISO 27001"]
-};
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
 
   // Monorepo states
-  const [assignedClients, setAssignedClients] = useState([
-    "ABC Technologies",
-    "XYZ Finance",
-    "Nova Logistics",
-    "Quantum Retail",
-    "BioHealth Solutions"
-  ]);
-  const [selectedClient, setSelectedClient] = useState("ABC Technologies");
-  const [selectedAudit, setSelectedAudit] = useState("ISO 27001");
-  const [auditsData, setAuditsData] = useState(() => {
-    const saved = localStorage.getItem('auditor_audits_data');
-    return saved ? JSON.parse(saved) : defaultAuditsData;
-  });
+  const [assignedClients, setAssignedClients] = useState([]);
+  const [clientAuditsMappingState, setClientAuditsMapping] = useState({});
+  const [selectedClient, setSelectedClient] = useState("");
+  const [selectedAudit, setSelectedAudit] = useState("");
+  const [auditsData, setAuditsData] = useState({});
+
+  useEffect(() => {
+    const loadRealData = async () => {
+      if (!user) return;
+      try {
+        const companiesList = await api.getCompanies();
+        const frameworksList = await api.getAuditFrameworks();
+        const controlsList = await api.getAuditControls();
+
+        const myFrameworkIds = new Set();
+        controlsList.forEach(ctrl => {
+          if (ctrl.assigned_to === user.id) {
+            myFrameworkIds.add(ctrl.framework_id);
+          }
+        });
+
+        const newAssignedClients = new Set();
+        const newClientAuditsMapping = {};
+        const newAuditsData = {};
+
+        const companyMap = {};
+        companiesList.forEach(c => { companyMap[c.id] = c.company_name; });
+
+        for (const fw of frameworksList) {
+          if (!myFrameworkIds.has(fw.id)) continue;
+
+          const cid = fw.companyID || fw.company_id;
+          const companyName = companyMap[cid] || cid;
+          const auditName = fw.audit_name || fw.auditName;
+
+          newAssignedClients.add(companyName);
+
+          if (!newClientAuditsMapping[companyName]) {
+            newClientAuditsMapping[companyName] = [];
+          }
+          if (!newClientAuditsMapping[companyName].includes(auditName)) {
+            newClientAuditsMapping[companyName].push(auditName);
+          }
+
+          if (!newAuditsData[companyName]) {
+            newAuditsData[companyName] = {};
+          }
+
+          const fwControls = controlsList.filter(c => c.framework_id === fw.id);
+          const assignedControls = fwControls.filter(c => c.assigned_to === user.id);
+
+          let pending = 0;
+          let completed = 0;
+          let aiReview = 0;
+
+          assignedControls.forEach(c => {
+             if (c.status === "Pending Review") pending++;
+             else if (c.status === "Completed" || c.status === "Approved") completed++;
+             else if (c.status === "Under AI Analysis") aiReview++;
+          });
+
+          let mappedEvidence = [];
+          const assignedControlIds = assignedControls.map(c => c.id);
+          
+          if (assignedControlIds.length > 0) {
+            try {
+              const batchEvidence = await api.getEvidenceBatch(assignedControlIds);
+              for (const link of batchEvidence) {
+                const ev = link.evidence_item;
+                const ac = assignedControls.find(c => c.id === link.audit_control_id);
+                if (ev && ac) {
+                  mappedEvidence.push({
+                    id: ev.id,
+                    fileName: ev.file_name,
+                    client: ev.user?.name || companyName,
+                    controlId: (ac.control?.framework_rules && ac.control.framework_rules.length > 0) ? ac.control.framework_rules.join(', ') : (ac.control?.control_id || ac.control_id),
+                    controlDesc: ac.control?.control_desc || 'No description available',
+                    date: new Date(ev.created_at).toLocaleDateString(),
+                    status: ev.status,
+                    auditor_notes: ev.auditor_notes || '',
+                    reviewed_by: ev.reviewed_by || null,
+                    reviewed_at: ev.reviewed_at ? new Date(ev.reviewed_at).toLocaleDateString() : null,
+                  });
+                }
+              }
+            } catch (err) {
+              console.error("Failed to fetch batch evidence", err);
+            }
+          }
+
+          newAuditsData[companyName][auditName] = {
+            stats: {
+              assigned: assignedControls.length,
+              pending,
+              completed,
+              aiReview
+            },
+            evidence: mappedEvidence,
+            findings: [],
+            reports: [],
+            progress: {
+              score: assignedControls.length ? Math.round((completed / assignedControls.length) * 100) : 0,
+              completed: completed,
+              total: assignedControls.length
+            }
+          };
+        }
+
+        const assignedArray = Array.from(newAssignedClients);
+        setAssignedClients(assignedArray);
+        setClientAuditsMapping(newClientAuditsMapping);
+        setAuditsData(newAuditsData);
+
+        if (assignedArray.length > 0) {
+           const firstClient = assignedArray[0];
+           setSelectedClient(firstClient);
+           if (newClientAuditsMapping[firstClient] && newClientAuditsMapping[firstClient].length > 0) {
+             setSelectedAudit(newClientAuditsMapping[firstClient][0]);
+           }
+        }
+
+      } catch (err) {
+        console.error("Failed to load real data:", err);
+      }
+    };
+
+    loadRealData();
+  }, [user]);
 
   useEffect(() => {
     // Check for existing session in localStorage on mount
@@ -174,7 +160,7 @@ export const AuthProvider = ({ children }) => {
     if (assignedClients.includes(clientName)) {
       setSelectedClient(clientName);
       // Auto select first audit of new client
-      const clientAudits = clientAuditsMapping[clientName] || [];
+      const clientAudits = clientAuditsMappingState[clientName] || [];
       if (clientAudits.length > 0) {
         setSelectedAudit(clientAudits[0]);
       }
@@ -182,28 +168,25 @@ export const AuthProvider = ({ children }) => {
   };
 
   const switchAudit = (auditName) => {
-    const clientAudits = clientAuditsMapping[selectedClient] || [];
+    const clientAudits = clientAuditsMappingState[selectedClient] || [];
     if (clientAudits.includes(auditName)) {
       setSelectedAudit(auditName);
     }
   };
 
-  // NOTE: evidenceId here is still the mock evidence id from
-  // defaultAuditsData (e.g. '1', '2') for controls/audits not yet wired to
-  // the real backend. This function now attempts the real API call using
-  // that id as a best effort - it will succeed once evidence ids in this
-  // context are replaced with real EvidenceItem ids from the backend
-  // (mirrors the same placeholder situation in the client app's
-  // ClientContext.jsx uploadEvidence). Local state updates immediately
-  // either way so the UI stays responsive; the backend call runs
-  // alongside it and is logged (not thrown) on failure so a stale id
-  // never breaks the review screen.
-  const updateEvidenceStatus = (evidenceId, newStatus) => {
+  const updateEvidenceStatus = async (evidenceId, newStatus) => {
+    try {
+      await api.updateEvidenceStatus(evidenceId, newStatus, user?.id);
+    } catch (err) {
+      console.error("Failed to update evidence status:", err);
+      return;
+    }
+
     setAuditsData(prev => {
       const clientData = prev[selectedClient] || {};
       const auditData = clientData[selectedAudit] || {};
       const list = auditData.evidence || [];
-      
+
       const updatedList = list.map(ev => {
         if (ev.id === evidenceId) {
           return { ...ev, status: newStatus };
@@ -222,26 +205,20 @@ export const AuthProvider = ({ children }) => {
         }
       };
     });
-
-    updateEvidenceItemStatus(evidenceId, newStatus).catch((err) => {
-      console.error(
-        '[CyberAries] Backend evidence status update failed (expected while evidence ids are still mock data):',
-        err.response?.data?.detail || err.message
-      );
-    });
   };
 
   const login = async (email, password) => {
     setIsLoading(true);
     try {
       const response = await api.login(email, password);
-      
+
       const userData = {
         id: response.user.id,
         email: response.user.email,
         name: response.user.name,
         username: response.user.username,
         role: response.user.role,
+        company_id: response.user.company_id,
         token: response.access_token,
       };
 
@@ -249,7 +226,7 @@ export const AuthProvider = ({ children }) => {
       localStorage.setItem('cyberaries_token', response.access_token);
       setUser(userData);
       setIsLoading(false);
-      
+
       return { success: true };
     } catch (err) {
       setIsLoading(false);
@@ -279,7 +256,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: !!user,
     isLoading,
     assignedClients,
-    clientAuditsMapping,
+    clientAuditsMapping: clientAuditsMappingState,
     selectedClient,
     selectedAudit,
     activeAuditData,

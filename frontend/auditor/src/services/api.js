@@ -10,6 +10,14 @@ const axiosClient = axios.create({
   },
 });
 
+axiosClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('cyberaries_token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+});
+
 // ─── Authentication Endpoints ─────────────────────────────────────
 
 export const login = async (username, password) => {
@@ -28,24 +36,78 @@ export const changePassword = async (userId, current_password, new_password) => 
   return data;
 };
 
-// ─── Evidence Review Endpoints ─────────────────────────────────────
+// ─── Master Controls Endpoints ──────────────────────────────────────
 
-// Approve/reject a piece of evidence. newStatus should match whatever
-// values the backend's EvidenceItem.status is expected to hold
-// (e.g. "Approved", "Rejected", "Pending Review").
-export const updateEvidenceItemStatus = async (evidenceItemId, newStatus, auditorNotes) => {
-  const { data } = await axiosClient.put(`/evidence-files/${evidenceItemId}`, {
-    status: newStatus,
-    ...(auditorNotes !== undefined ? { auditor_notes: auditorNotes } : {}),
-  });
+export const getControls = async () => {
+  const { data } = await axiosClient.get('/controls');
   return data;
 };
 
-// All evidence linked to a specific audit control, including which OTHER
-// audit controls the same evidence item is also linked to - lets the
-// auditor UI show "this evidence is shared with N other audits".
+// ─── Auditor Dashboard / Assigned Audits ────────────────────────────
+
+export const getAuditFrameworks = async () => {
+  const { data } = await axiosClient.get('/audit-framework/');
+  return data;
+};
+
+export const getCompanies = async () => {
+  const { data } = await axiosClient.get('/company/');
+  return data;
+};
+
+export const getAuditControls = async () => {
+  const { data } = await axiosClient.get('/audit-control/');
+  return data;
+};
+
+// ─── Evidence Review ────────────────────────────────────────────────
+
+export const getEvidenceByCompany = async (companyId) => {
+  const { data } = await axiosClient.get(`/evidence-files/company/${companyId}`);
+  return data;
+};
+
 export const getEvidenceForAuditControl = async (auditControlId) => {
   const { data } = await axiosClient.get(`/evidence-files/audit-control/${auditControlId}`);
+  return data;
+};
+
+export const getEvidenceBatch = async (auditControlIds) => {
+  const ids = auditControlIds.join(',');
+  const { data } = await axiosClient.get(`/evidence-files/batch?audit_control_ids=${ids}`);
+  return data;
+};
+
+/*
+ * Reuses the same evidence preview/download endpoint already used by the
+ * Client frontend: GET /evidence-files/presign-download/{evidence_item_id}
+ */
+export const getEvidenceDownloadUrl = async (evidenceItemId) => {
+  const { data } = await axiosClient.get(`/evidence-files/presign-download/${evidenceItemId}`);
+  return data;
+};
+
+/*
+ * Auditor Notes — updates evidence_files.auditor_notes via the existing
+ * PUT /evidence-files/{evidence_item_id}/auditor-notes endpoint.
+ */
+export const updateEvidenceNotes = async (evidenceItemId, auditor_notes) => {
+  const { data } = await axiosClient.put(
+    `/evidence-files/${evidenceItemId}/auditor-notes`,
+    { auditor_notes }
+  );
+  return data;
+};
+
+/*
+ * Evidence Status — updates evidence_files.status via the existing
+ * PUT /evidence-files/{evidence_item_id} endpoint.
+ */
+export const updateEvidenceStatus = async (evidenceItemId, status, userId) => {
+  const { data } = await axiosClient.put(
+    `/evidence-files/${evidenceItemId}`,
+    { status, reviewed_by: userId }
+  );
   return data;
 };
 
@@ -53,8 +115,16 @@ export const getEvidenceForAuditControl = async (auditControlId) => {
 const api = {
   login,
   changePassword,
-  updateEvidenceItemStatus,
+  getControls,
+  getAuditFrameworks,
+  getCompanies,
+  getAuditControls,
+  getEvidenceByCompany,
   getEvidenceForAuditControl,
+  getEvidenceBatch,
+  getEvidenceDownloadUrl,
+  updateEvidenceNotes,
+  updateEvidenceStatus,
 };
 
 export default api;

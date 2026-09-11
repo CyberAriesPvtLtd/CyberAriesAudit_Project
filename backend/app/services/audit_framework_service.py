@@ -5,9 +5,6 @@ from app.models.audit_framework import AuditFramework
 from app.models.company import Company
 from app.models.controls import Controls
 from app.models.audit_control import AuditControl
-from app.models.controls_evidence_type import ControlsEvidenceType
-from app.models.evidence_files import EvidenceItem
-from app.services.evidence_files_service import _link_evidence_to_control
 
 
 def create_audit_framework(db: Session, audit_data):
@@ -47,7 +44,6 @@ def create_audit_framework(db: Session, audit_data):
         .all()
     )
 
-    new_audit_controls = []
     for control in matching_controls:
         audit_control = AuditControl(
             framework_id=audit_framework.id,
@@ -59,38 +55,6 @@ def create_audit_framework(db: Session, audit_data):
         )
 
         db.add(audit_control)
-        new_audit_controls.append((audit_control, control))
-
-    db.commit()
-
-    # Pre-link existing evidence: if this company already has evidence on
-    # file that satisfies one of this new audit's controls (via a shared
-    # EvidenceType), attach it immediately - so a newly started audit can
-    # show some requirements already met from day one, instead of asking
-    # the client to re-upload something they submitted for another audit.
-    for audit_control, control in new_audit_controls:
-        required_type_ids = [
-            row.evidence_type_id for row in
-            db.query(ControlsEvidenceType)
-            .filter(ControlsEvidenceType.control_id == control.id)
-            .all()
-        ]
-        if not required_type_ids:
-            continue
-
-        existing_evidence = (
-            db.query(EvidenceItem)
-            .filter(
-                EvidenceItem.company_id == audit_data.company_id,
-                EvidenceItem.evidence_type_id.in_(required_type_ids),
-            )
-            .all()
-        )
-        for evidence in existing_evidence:
-            _link_evidence_to_control(
-                db, evidence.id, audit_control.id,
-                linked_by_type="auto", linked_by_user=None,
-            )
 
     db.commit()
 
@@ -99,6 +63,20 @@ def create_audit_framework(db: Session, audit_data):
 
 def get_all_audit_frameworks(db: Session):
     return db.query(AuditFramework).all()
+
+
+def get_audit_frameworks_by_company(db: Session, company_id: str):
+    """Return all audit frameworks assigned to a specific company."""
+    company = db.query(Company).filter(Company.id == company_id).first()
+    if not company:
+        raise HTTPException(status_code=404, detail="Company not found")
+
+    return (
+        db.query(AuditFramework)
+        .filter(AuditFramework.company_id == company_id)
+        .order_by(AuditFramework.created_at.desc())
+        .all()
+    )
 
 
 def get_audit_framework_by_id(db: Session, audit_framework_id: str):

@@ -18,8 +18,5 @@ def generate_audit_control_id():
 def generate_evidence_file_id():
     return f"ev_{generate(size=12)}"
 
-def generate_evidence_type_id():
-    return f"et_{generate(size=12)}"
-
 def generate_audit_control_evidence_id():
-    return f"ace_{generate(size=12)}"
+    return f"ae_{generate(size=12)}"

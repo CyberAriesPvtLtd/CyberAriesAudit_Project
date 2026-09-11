@@ -26,15 +26,18 @@ class EvidenceItem(Base):
     status = Column(String, nullable=False, default="Pending Review")
 
     company_id = Column(String, ForeignKey("company.id"), nullable=False, index=True)
-    evidence_type_id = Column(String, ForeignKey("evidence_type.id"), nullable=True, index=True)
+
     uploaded_by = Column(String, ForeignKey("user.id"), nullable=False, index=True)
+    reviewed_by = Column(String, ForeignKey("user.id"), nullable=True, index=True)
+    reviewed_at = Column(DateTime(timezone=True), nullable=True)
 
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     # Relationships
     company = relationship("Company", back_populates="evidence_items")
-    evidence_type = relationship("EvidenceType", back_populates="evidence_items")
-    user = relationship("User", back_populates="uploaded_evidence_items")
+
+    user = relationship("User", foreign_keys=[uploaded_by], back_populates="uploaded_evidence_items")
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
     audit_control_links = relationship(
         "AuditControlEvidence",
         back_populates="evidence_item",

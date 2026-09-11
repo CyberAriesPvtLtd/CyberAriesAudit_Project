@@ -5,7 +5,6 @@ from sqlalchemy import text
 from app.database import Base, engine, SessionLocal
 from app.utils.seed import seed_default_admin
 from app.utils.seed_controls import seed_controls
-from app.services.storage_service import ensure_bucket_exists
 
 # Import Models
 from app.models import (
@@ -14,10 +13,9 @@ from app.models import (
     AuditFramework,
     Controls,
     AuditControl,
-    EvidenceType,
-    ControlsEvidenceType,
     EvidenceItem,
     AuditControlEvidence,
+    ControlCrossReference,
 )
 
 # Import Routers
@@ -32,19 +30,20 @@ from app.routers.evidence_files_router import router as evidence_files_router
 # Create all database tables
 Base.metadata.create_all(bind=engine)
 
-# Seed default admin user and controls if empty
+# Seed default admin user and sync controls from Excel files
 with SessionLocal() as db:
     seed_default_admin(db)
-    
-    # Automatically seed controls if the table is empty
-    if not db.query(Controls).first():
-        print("[CyberAries] Controls table is empty. Auto-seeding from Excel files...")
-        seed_controls(db)
-    else:
-        print("[CyberAries] Controls table already populated. Skipping auto-seed.")
 
-# Make sure the MinIO bucket for evidence files exists before accepting uploads
+    # Always run seed — it is idempotent (skips unchanged, updates changed,
+    # inserts new). This ensures files dropped directly into data/controls/
+    # by a developer are picked up on every restart.
+    print("[CyberAries] Syncing controls from Excel files...")
+    seed_controls(db)
+
+from app.services.storage_service import ensure_bucket_exists
+print("[CyberAries] Ensuring MinIO bucket exists...")
 ensure_bucket_exists()
+
 
 app = FastAPI(
     title="Aries Audit Backend",

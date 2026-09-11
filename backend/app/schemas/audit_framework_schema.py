@@ -1,6 +1,7 @@
 from pydantic import BaseModel, Field
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+
 
 class AuditFrameworkCreate(BaseModel):
     audit_type: str
@@ -9,7 +10,11 @@ class AuditFrameworkCreate(BaseModel):
     audit_name: str
     target_fy: str
     status: str
-    company_id: str = Field(validation_alias="companyID")
+    company_id: str = Field(
+        validation_alias="companyID",
+        serialization_alias="companyID"
+    )
+    assigned_auditors: Optional[List[str]] = []
 
 
 class AuditFrameworkResponse(BaseModel):
@@ -20,11 +25,16 @@ class AuditFrameworkResponse(BaseModel):
     audit_name: str
     target_fy: str
     status: str
-    company_id: str = Field(validation_alias="companyID")
+    company_id: str = Field(
+        validation_alias="companyID",
+        serialization_alias="companyID"
+    )
+    assigned_auditors: Optional[List[str]] = []
     created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True
+        populate_by_name = True
 
 
 class AuditFrameworkUpdate(BaseModel):
@@ -33,6 +43,9 @@ class AuditFrameworkUpdate(BaseModel):
     audit_subcategory: Optional[str] = None
     audit_name: Optional[str] = None
     target_fy: Optional[str] = None
+    status: Optional[str] = None
+    assigned_auditors: Optional[List[str]] = None
+
 
 class AuditFramworkStatusOverride(BaseModel):
-    status: str # only admin / auditor has the access to update the status
+    status: str

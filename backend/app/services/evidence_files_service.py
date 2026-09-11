@@ -1,10 +1,12 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime, timezone
 
 from app.models.evidence_files import EvidenceItem
 from app.models.audit_control_evidence import AuditControlEvidence
 from app.models.audit_control import AuditControl
-from app.models.controls_evidence_type import ControlsEvidenceType
+from app.models.control_cross_reference import ControlCrossReference
+
 from app.models.user import User
 from app.models.company import Company
 from app.services import storage_service
@@ -58,7 +60,7 @@ def confirm_evidence_upload(db: Session, evidence_item_id: str, data):
         mime_type=data.mime_type,
         status="Pending Review",
         company_id=data.company_id,
-        evidence_type_id=data.evidence_type_id,
+
         uploaded_by=data.uploaded_by,
     )
     db.add(evidence)
@@ -77,32 +79,40 @@ def confirm_evidence_upload(db: Session, evidence_item_id: str, data):
             )
         )
 
-    # Link 2 (the reuse feature): auto-link every OTHER AuditControl in this
-    # company whose Controls row requires the same evidence_type_id.
-    if data.evidence_type_id:
-        matching_control_ids = (
-            db.query(ControlsEvidenceType.control_id)
-            .filter(ControlsEvidenceType.evidence_type_id == data.evidence_type_id)
-            .subquery()
-        )
-        matching_audit_controls = (
-            db.query(AuditControl)
-            .join(AuditControl.audit_framework)
-            .filter(
-                AuditControl.control_id.in_(matching_control_ids),
-                AuditControl.audit_framework.has(company_id=data.company_id),
-            )
-            .all()
-        )
-        for ac in matching_audit_controls:
-            if ac.id == data.audit_control_id:
-                continue  # already linked above
-            links_created.append(
-                _link_evidence_to_control(
-                    db, evidence.id, ac.id,
-                    linked_by_type="auto", linked_by_user=None,
-                )
-            )
+    # Link 2 (the reuse feature): Auto-link using GRC Cross-Mapping
+    if data.audit_control_id:
+        uploaded_ac = db.query(AuditControl).filter(AuditControl.id == data.audit_control_id).first()
+        if uploaded_ac:
+            # Get the exact control code, e.g. "CSCRF-AIF-Medium-Size-GV.RR.S3-1"
+            uploaded_control = uploaded_ac.control
+            if uploaded_control:
+                # Find all target control codes that this source code maps to
+                cross_refs = db.query(ControlCrossReference).filter(
+                    ControlCrossReference.source_control_code == uploaded_control.control_id
+                ).all()
+
+                target_codes = [cr.target_control_code for cr in cross_refs]
+
+                if target_codes:
+                    # Find AuditControls in the SAME company that match these target codes
+                    matching_audit_controls = (
+                        db.query(AuditControl)
+                        .join(AuditControl.control)
+                        .join(AuditControl.audit_framework)
+                        .filter(
+                            AuditControl.control.has(AuditControl.control.property.mapper.class_.control_id.in_(target_codes)),
+                            AuditControl.audit_framework.has(company_id=data.company_id)
+                        )
+                        .all()
+                    )
+
+                    for target_ac in matching_audit_controls:
+                        links_created.append(
+                            _link_evidence_to_control(
+                                db, evidence.id, target_ac.id,
+                                linked_by_type="auto", linked_by_user=None,
+                            )
+                        )
 
     db.commit()
 
@@ -157,6 +167,18 @@ def get_evidence_for_audit_control(db: Session, audit_control_id: str):
     )
 
 
+def get_evidence_for_multiple_controls(db: Session, audit_control_ids: list[str]):
+    return (
+        db.query(AuditControlEvidence)
+        .options(
+            joinedload(AuditControlEvidence.evidence_item)
+            .joinedload(EvidenceItem.user)
+        )
+        .filter(AuditControlEvidence.audit_control_id.in_(audit_control_ids))
+        .all()
+    )
+
+
 def manually_link_evidence(db: Session, data):
     audit_control = db.query(AuditControl).filter(AuditControl.id == data.audit_control_id).first()
     if not audit_control:
@@ -195,6 +217,11 @@ def update_evidence_item(db: Session, evidence_item_id: str, data):
         raise HTTPException(status_code=404, detail="Evidence Item not found")
 
     update_dict = data.model_dump(exclude_unset=True)
+    
+    if "status" in update_dict and "reviewed_by" in update_dict:
+        if update_dict["status"] in ["Approved", "Rejected"]:
+            evidence.reviewed_at = datetime.now(timezone.utc)
+            
     for key, value in update_dict.items():
         setattr(evidence, key, value)
 
@@ -213,3 +240,32 @@ def delete_evidence_item(db: Session, evidence_item_id: str):
     db.commit()
 
     return {"message": "Evidence Item deleted successfully"}
+
+
+def get_presigned_download(db: Session, evidence_item_id: str):
+    """Generate a temporary (15 min) MinIO download URL for the given evidence item."""
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_item_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence Item not found")
+
+    download_url = storage_service.get_presigned_download_url(evidence.storage_key)
+
+    return {
+        "download_url": download_url,
+        "file_name": evidence.file_name,
+        "mime_type": evidence.mime_type,
+        "file_size": evidence.file_size,
+    }
+
+
+def update_auditor_notes(db: Session, evidence_item_id: str, data):
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_item_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence Item not found")
+
+    evidence.auditor_notes = data.auditor_notes
+
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+

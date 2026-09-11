@@ -1,95 +1,17 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import api, { uploadEvidenceFile, deleteEvidenceItem as apiDeleteEvidenceItem } from '../services/api';
+import {
+  initialAllControls as mockControls,
+  initialAllFindings as mockFindings,
+  initialActivities as mockActivities,
+} from '../data/mockData';
 
 const ClientContext = createContext();
 
-const initialAllControls = {
-  "SOC 2 Type II": [
-    { id: 'CTRL-AC-01', name: 'User Access Authorization', domain: 'Access Control', standard: 'SOC 2 CC6.1 / ISO A.9.1', status: 'Completed', description: 'Ensure all user access requests are formally authorized and reviewed quarterly.', requiredEvidence: 'Access requests forms, quarterly review approval logs', evidenceFile: 'Access_Auth_Review_Q1.pdf', evidenceSize: '1.4 MB', evidenceDate: '2026-05-10' },
-    { id: 'CTRL-AC-02', name: 'Multi-Factor Authentication', domain: 'Access Control', standard: 'SOC 2 CC6.3 / ISO A.9.4', status: 'Action Required', description: 'Enforce MFA for all external administrative access to corporate assets.', requiredEvidence: 'Screenshots of AWS IAM MFA settings, AD configuration reports', evidenceFile: null, evidenceSize: null, evidenceDate: null },
-    { id: 'CTRL-EN-01', name: 'Encryption of Data at Rest', domain: 'Cryptography', standard: 'SOC 2 CC6.6 / ISO A.18.1', status: 'Completed', description: 'All database assets containing PII must be encrypted using AES-256.', requiredEvidence: 'RDS KMS configuration screenshots, database policy document', evidenceFile: 'Database_KMS_Encryption.png', evidenceSize: '840 KB', evidenceDate: '2026-06-02' },
-    { id: 'CTRL-EN-02', name: 'Data in Transit Protection', domain: 'Cryptography', standard: 'SOC 2 CC6.7 / ISO A.10.1', status: 'Completed', description: 'Configure secure transit protocols (TLS 1.3) for external API interfaces.', requiredEvidence: 'Nginx SSL config files, server TLS handshake certificates', evidenceFile: 'Nginx_TLS1.3_Config.txt', evidenceSize: '45 KB', evidenceDate: '2026-06-15' },
-    { id: 'CTRL-OP-01', name: 'Daily Backup Operations', domain: 'Operations Security', standard: 'SOC 2 CC7.1 / ISO A.12.3', status: 'Completed', description: 'Retain offsite backups with encryption for at least 7 years.', requiredEvidence: 'S3 lifecycle rule config screenshots, daily backup completion records', evidenceFile: 'S3_Backup_Lifecycle_Rules.png', evidenceSize: '1.2 MB', evidenceDate: '2026-06-20' },
-    { id: 'CTRL-RA-01', name: 'Annual Vulnerability Assessments', domain: 'Risk Assessment', standard: 'SOC 2 CC8.1 / ISO A.12.6', status: 'Action Required', description: 'Schedule yearly external penetration tests and remediate critical items within 30 days.', requiredEvidence: 'Latest penetration test executive report, vulnerability scan summary logs', evidenceFile: null, evidenceSize: null, evidenceDate: null },
-    { id: 'CTRL-HR-01', name: 'Employee Background Check', domain: 'Human Resources', standard: 'SOC 2 CC2.1 / ISO A.7.1', status: 'In Progress', description: 'Verify education, credentials, and criminal history for all new hires.', requiredEvidence: 'Third-party HR vetting invoices, signed consent forms', evidenceFile: 'Employee_Vetting_Invoice.pdf', evidenceSize: '310 KB', evidenceDate: '2026-07-05' }
-  ],
-  "ISO 27001": [
-    { id: 'ISO-A5-01', name: 'Information Security Policies', domain: 'Security Policy', standard: 'ISO 27001 A.5.1', status: 'Completed', description: 'Establish and publish information security policies integrated with operational controls.', requiredEvidence: 'Signed InfoSec Policy Statement, distribution log', evidenceFile: 'Info_Sec_Policy_Signed.pdf', evidenceSize: '450 KB', evidenceDate: '2026-05-15' },
-    { id: 'ISO-A6-01', name: 'Security Roles & Responsibilities', domain: 'Organization of Security', standard: 'ISO 27001 A.6.1.1', status: 'Action Required', description: 'Define and assign cybersecurity administration and oversight roles.', requiredEvidence: 'Security committee organogram, roles definition spreadsheet', evidenceFile: null, evidenceSize: null, evidenceDate: null },
-    { id: 'ISO-A8-01', name: 'Inventory of Assets', domain: 'Asset Management', standard: 'ISO 27001 A.8.1.1', status: 'Action Required', description: 'Maintain a detailed registry of all physical, software, and data assets.', requiredEvidence: 'CMDB export logs, asset owners spreadsheet', evidenceFile: null, evidenceSize: null, evidenceDate: null },
-    { id: 'ISO-A9-02', name: 'Access Registration Lifecycle', domain: 'Access Control', standard: 'ISO 27001 A.9.2.1', status: 'Completed', description: 'Manage employee user creation, modifications, and terminations cleanly.', requiredEvidence: 'AD provisioning logs, ticket history screenshots', evidenceFile: 'Access_Auth_Logs.pdf', evidenceSize: '1.1 MB', evidenceDate: '2026-06-01' },
-    { id: 'ISO-A12-04', name: 'Event Log Telemetry', domain: 'Logging & Monitoring', standard: 'ISO 27001 A.12.4.1', status: 'Completed', description: 'Configure active telemetry event capture and logs retention.', requiredEvidence: 'VPC Flow Logs config, CloudWatch metric screenshots', evidenceFile: 'CloudWatch_Logging_Rules.png', evidenceSize: '710 KB', evidenceDate: '2026-06-18' }
-  ],
-  "SEBI CSCRF": [
-    { id: 'SEBI-GV-01', name: 'Security Governance Charter', domain: 'Governance', standard: 'SEBI CSCRF GV-1.1', status: 'Completed', description: 'Appoint cybersecurity operational steering committee chaired by CISO.', requiredEvidence: 'Governance Charter meeting minutes, CISO appointment letter', evidenceFile: 'SEBI_CISO_Charter.pdf', evidenceSize: '820 KB', evidenceDate: '2026-04-12' },
-    { id: 'SEBI-ID-02', name: 'Asset Classification & Criticality', domain: 'Identification', standard: 'SEBI CSCRF ID-1.2', status: 'Completed', description: 'Perform weekly cataloging and security impact classifications.', requiredEvidence: 'Critical assets map, weekly inventory scan', evidenceFile: 'Critical_Asset_Flows.png', evidenceSize: '1.5 MB', evidenceDate: '2026-05-08' },
-    { id: 'SEBI-PR-03', name: 'MFA Enforcement on Admin Lanes', domain: 'Protection', standard: 'SEBI CSCRF PR-2.1', status: 'Completed', description: 'Enforce multi-factor authentication for administrative layers.', requiredEvidence: 'MFA policy document, VPN MFA screenshots', evidenceFile: 'MFA_Active_Directory.pdf', evidenceSize: '950 KB', evidenceDate: '2026-06-05' },
-    { id: 'SEBI-DE-04', name: 'SOC Log Aggregation', domain: 'Detection', standard: 'SEBI CSCRF DE-3.4', status: 'Completed', description: 'Establish SIEM dashboards for active threat scanning.', requiredEvidence: 'SIEM config, continuous security scanning log', evidenceFile: 'SIEM_Integration_Logs.txt', evidenceSize: '120 KB', evidenceDate: '2026-07-02' }
-  ],
-  "RBI Cyber Security": [
-    { id: 'RBI-AC-01', name: 'Access Authorization Control', domain: 'Access Management', standard: 'RBI CS-1.1', status: 'In Progress', description: 'RBI privs check control parameters.', requiredEvidence: 'Database privileges request logs, signed approval files', evidenceFile: null, evidenceSize: null, evidenceDate: null }
-  ]
-};
-
-const initialAllFindings = {
-  "SOC 2 Type II": [
-    {
-      id: 'CTRL-AC-02',
-      name: 'Multi-Factor Authentication',
-      status: 'Pending Response',
-      auditor: 'Dr. Evelyn Foster',
-      comments: [
-        {
-          sender: 'Auditor',
-          name: 'Dr. Evelyn Foster',
-          message: 'Hello. I was reviewing the external console logs and noticed a few administrative users connecting without MFA enabled. Could you please provide the AWS IAM configuration details or a screenshot showing that administrative accounts enforce MFA?',
-          timestamp: '2026-07-08T10:30:00Z',
-          attachment: null
-        }
-      ]
-    },
-    {
-      id: 'CTRL-HR-01',
-      name: 'Employee Background Check',
-      status: 'Pending Response',
-      auditor: 'Dr. Evelyn Foster',
-      comments: [
-        {
-          sender: 'Auditor',
-          name: 'Dr. Evelyn Foster',
-          message: 'The vetting invoice you submitted shows background checks for 2025. Could you upload the current policy document or invoices confirming that background screening is active for Q2 2026 hires?',
-          timestamp: '2026-07-09T15:20:00Z',
-          attachment: null
-        }
-      ]
-    }
-  ],
-  "ISO 27001": [
-    {
-      id: 'ISO-A6-01',
-      name: 'Security Roles & Responsibilities',
-      status: 'Pending Response',
-      auditor: 'Dr. Evelyn Foster',
-      comments: [
-        {
-          sender: 'Auditor',
-          name: 'Dr. Evelyn Foster',
-          message: 'Please upload the signed governance organogram showing who administers access security roles.',
-          timestamp: '2026-07-10T09:30:00Z',
-          attachment: null
-        }
-      ]
-    }
-  ],
-  "SEBI CSCRF": [],
-  "RBI Cyber Security": []
-};
-
-const initialActivities = [
-  { id: 'ACT-C01', user: 'System', type: 'System', message: 'Client compliance score initialized.', timestamp: '2026-07-05T09:00:00Z' },
-  { id: 'ACT-C02', user: 'Sarah Connor', type: 'Document', message: 'Uploaded evidence file: "Employee_Vetting_Invoice.pdf" for CTRL-HR-01.', timestamp: '2026-07-05T10:15:00Z' },
-  { id: 'ACT-C03', user: 'Dr. Evelyn Foster', type: 'Audit', message: 'Raised clarification question for CTRL-HR-01 (Background screening policy).', timestamp: '2026-07-09T15:20:00Z' },
-];
+// ─── Toggle ──────────────────────────────────────────────────────
+// Set VITE_USE_MOCK_API=true in frontend/client/.env to bypass the
+// backend entirely (useful for frontend devs who don't run Docker).
+const USE_MOCK = import.meta.env.VITE_USE_MOCK_API === 'true';
 
 const formatBytesForContext = (bytes, decimals = 2) => {
   if (!bytes || bytes === 0) return '0 Bytes';
@@ -113,31 +35,167 @@ export const ClientProvider = ({ children }) => {
     return saved ? JSON.parse(saved) : null;
   });
 
-  const [assignedAudits, setAssignedAudits] = useState(['SOC 2 Type II', 'ISO 27001', 'SEBI CSCRF', 'RBI Cyber Security']);
+  const [assignedAudits, setAssignedAudits] = useState(() => {
+    if (USE_MOCK) return Object.keys(mockControls);
+    return [];
+  });
+
+  const [clientAudits, setClientAudits] = useState(() => {
+    if (USE_MOCK) {
+      return Object.keys(mockControls).map((key, idx) => ({
+        id: `mock-audit-${idx}`,
+        audit_name: key,
+        audit_type: 'Framework Standard',
+        status: 'In Progress',
+        target_fy: '2026-12-31'
+      }));
+    }
+    return [];
+  });
+
   const [currentAudit, setCurrentAudit] = useState(() => {
     const saved = localStorage.getItem('cc_current_audit');
-    return saved || 'SOC 2 Type II';
+    if (saved) return saved;
+    if (USE_MOCK) return Object.keys(mockControls)[0];
+    return '';
   });
 
   const [allControls, setAllControls] = useState(() => {
-    const saved = localStorage.getItem('cc_all_controls');
-    return saved ? JSON.parse(saved) : initialAllControls;
+    if (USE_MOCK) {
+      const saved = localStorage.getItem('cc_all_controls');
+      return saved ? JSON.parse(saved) : mockControls;
+    }
+    return {};
   });
+
+  // Maps auditName -> array of { id (audit_control id), backendControlId, ... }
+  // This lets uploadEvidence pass the real audit_control_id to the backend.
+  const [auditControlMap, setAuditControlMap] = useState({});
 
   const [allFindings, setAllFindings] = useState(() => {
     const saved = localStorage.getItem('cc_all_findings');
-    return saved ? JSON.parse(saved) : initialAllFindings;
+    return saved ? JSON.parse(saved) : (USE_MOCK ? mockFindings : {});
   });
 
   const [activities, setActivities] = useState(() => {
     const saved = localStorage.getItem('cc_activities');
-    return saved ? JSON.parse(saved) : initialActivities;
+    return saved ? JSON.parse(saved) : (USE_MOCK ? mockActivities : []);
   });
 
   const [settings, setSettings] = useState(() => {
     const saved = localStorage.getItem('cc_settings');
     return saved ? JSON.parse(saved) : defaultSettings;
   });
+
+  // ─── Fetch real data from backend ─────────────────────────────
+  const fetchClientData = useCallback(async () => {
+    if (USE_MOCK || !currentUser?.companyId) return;
+
+    try {
+      // 1. Get the company's assigned audit frameworks
+      const frameworks = await api.getCompanyAuditFrameworks(currentUser.companyId);
+      if (!frameworks || frameworks.length === 0) {
+        console.log('[CyberAries] No audits assigned to this company.');
+        setAssignedAudits([]);
+        setAllControls({});
+        return;
+      }
+
+      const auditNames = frameworks.map(f => f.audit_name || `${f.audit_type} Assessment`);
+      setAssignedAudits(auditNames);
+      setClientAudits(frameworks);
+
+      // If no currentAudit selected yet, pick the first one
+      if (!currentAudit || !auditNames.includes(currentAudit)) {
+        setCurrentAudit(auditNames[0]);
+      }
+
+      // 2. For each framework, fetch its AuditControls (with nested Controls)
+      const controlsByAudit = {};
+      const acMap = {};
+
+      for (const fw of frameworks) {
+        const auditName = fw.audit_name || `${fw.audit_type} Assessment`;
+        try {
+          const auditControls = await api.getAuditControlsByFramework(fw.id);
+
+          // Also fetch evidence linked to each audit control
+          const controlsWithEvidence = await Promise.all(
+            (auditControls || []).map(async (ac) => {
+              const ctrl = ac.control || {};
+              const rules = ctrl.framework_rules || [];
+              const primaryDocs = ctrl.primary_evidence || [];
+              const secondaryDocs = ctrl.secondary_evidence || [];
+
+              // Fetch evidence files linked to this audit control
+              let evidenceFiles = [];
+
+              try {
+                const linkedEvidence = await api.getEvidenceForAuditControl(ac.id);
+                if (linkedEvidence && linkedEvidence.length > 0) {
+                  evidenceFiles = linkedEvidence.map(link => {
+                    const item = link.evidence_item;
+                    if (!item) return null;
+                    return {
+                      name: item.file_name,
+                      size: item.file_size ? formatBytesForContext(item.file_size) : '—',
+                      date: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+                      type: item.file_name.split('.').pop().toUpperCase(),
+                      uploadedBy: item.uploaded_by || 'Client',
+                      status: 'Uploaded',
+                      evidenceItemId: item.id,
+                      linkId: link.id, // the AuditControlEvidence link id
+                    };
+                  }).filter(Boolean);
+                }
+              } catch (e) {
+                // Evidence fetch failed — non-critical, continue without evidence data
+              }
+
+              return {
+                id: ac.id,                            // This IS the audit_control_id
+                name: ctrl.control_desc || 'Untitled Control',
+                domain: ctrl.control_domain || '',
+                standard: rules.join(', ') || ctrl.control_id || '',
+                status: evidenceFiles.length > 0 ? 'In Progress' : (ac.status || 'Action Required'),
+                description: ctrl.control_desc || '',
+                requiredEvidence: [...primaryDocs, ...secondaryDocs].join(', ') || 'Evidence documents required',
+                evidenceFiles,
+                frameworkCategory: ctrl.audit_category || '',
+                frameworkSubcategory: ctrl.audit_subcategory || '',
+              };
+            })
+          );
+
+          controlsByAudit[auditName] = controlsWithEvidence;
+
+          // Build a lookup: controlId (frontend) -> real audit_control_id (backend)
+          acMap[auditName] = {};
+          controlsWithEvidence.forEach(c => {
+            acMap[auditName][c.id] = c.id; // they're the same — the ac.id
+          });
+
+        } catch (err) {
+          console.warn(`[CyberAries] Failed to fetch controls for ${auditName}:`, err.message);
+          controlsByAudit[auditName] = [];
+        }
+      }
+
+      setAllControls(controlsByAudit);
+      setAuditControlMap(acMap);
+      console.log(`[CyberAries] Client data loaded: ${frameworks.length} audits, ${Object.values(controlsByAudit).flat().length} controls.`);
+
+    } catch (err) {
+      console.error('[CyberAries] Failed to fetch client data:', err.message);
+    }
+  }, [currentUser?.companyId]);
+
+  // Fetch data on login / mount (only when not using mock)
+  useEffect(() => {
+    if (!USE_MOCK && currentUser?.companyId) {
+      fetchClientData();
+    }
+  }, [currentUser?.companyId, fetchClientData]);
 
   // Sync state to local storage
   useEffect(() => {
@@ -223,27 +281,23 @@ export const ClientProvider = ({ children }) => {
   };
 
   // Evidence Management
-  // NOTE: audit_control_id and evidence_type_id are placeholders here because
-  // `controls` is still mock data with no real backend AuditControl ids (see
-  // conversation history). The upload itself is fully real - it creates a
-  // real EvidenceItem row in Postgres and a real object in MinIO - but the
-  // link to a specific audit control will not resolve correctly until
-  // ClientContext is wired to GET /audit-control/framework/{id}. Revisit
-  // this function once that happens: swap PLACEHOLDER_AUDIT_CONTROL_ID for
-  // the control's real backend id, and evidenceTypeId for a real selection.
   const uploadEvidence = async (controlId, file, onProgress) => {
     if (!currentUser?.companyId || !currentUser?.id) {
       console.error('[CyberAries] Cannot upload evidence: missing companyId or user id.');
       return { success: false, error: 'You must be logged in with a company account to upload evidence.' };
     }
 
+    // Resolve the real audit_control_id for the backend.
+    // In real mode the controlId IS the audit_control_id already.
+    // In mock mode we pass null (same as before).
+    const auditControlId = USE_MOCK ? null : controlId;
+
     try {
       const result = await uploadEvidenceFile({
         file,
         companyId: currentUser.companyId,
         uploadedBy: currentUser.id,
-        auditControlId: null, // placeholder - see note above
-        evidenceTypeId: null, // placeholder - see note above
+        auditControlId,
         onProgress,
       });
 
@@ -256,11 +310,23 @@ export const ClientProvider = ({ children }) => {
           if (c.id === controlId) {
             return {
               ...c,
-              evidenceFile: fileName,
+              evidenceFile: fileName, // keep for backward compatibility
               evidenceSize: fileSize,
               evidenceDate: new Date().toISOString().split('T')[0],
               status: 'In Progress',
-              evidenceItemId: result.evidence.id, // real backend id, kept for delete/reuse later
+              evidenceItemId: result.evidence.id,
+              evidenceFiles: [
+                ...(c.evidenceFiles || []),
+                {
+                  name: fileName,
+                  size: fileSize,
+                  date: new Date().toISOString().split('T')[0],
+                  type: fileName.split('.').pop().toUpperCase(),
+                  uploadedBy: currentUser?.fullName || 'Client',
+                  status: 'Uploaded',
+                  evidenceItemId: result.evidence.id
+                }
+              ]
             };
           }
           return c;
@@ -270,7 +336,7 @@ export const ClientProvider = ({ children }) => {
 
       addActivityLog(currentUser?.fullName || 'Client', 'Document', `Uploaded evidence file: "${fileName}" for ${controlId} under ${currentAudit}.`);
 
-      // Auto-resolve any pending findings for this control (unchanged behavior)
+      // Auto-resolve any pending findings for this control
       setAllFindings(prev => {
         const currentList = prev[currentAudit] || [];
         const updatedList = currentList.map(f => {
@@ -302,15 +368,16 @@ export const ClientProvider = ({ children }) => {
     }
   };
 
-    const deleteEvidence = async (controlId) => {
+  const deleteEvidence = async (controlId, evidenceItemId) => {
     let fileName = '';
-    let evidenceItemId = null;
 
     setAllControls(prev => {
       const currentList = prev[currentAudit] || [];
       const found = currentList.find(c => c.id === controlId);
-      fileName = found?.evidenceFile;
-      evidenceItemId = found?.evidenceItemId;
+      if (found && found.evidenceFiles) {
+        const file = found.evidenceFiles.find(f => f.evidenceItemId === evidenceItemId);
+        if (file) fileName = file.name;
+      }
       return prev;
     });
 
@@ -319,8 +386,6 @@ export const ClientProvider = ({ children }) => {
         await apiDeleteEvidenceItem(evidenceItemId);
       } catch (err) {
         console.error('[CyberAries] Failed to delete evidence from backend:', err.response?.data?.detail || err.message);
-        // Continue clearing local state even if the backend call fails -
-        // matches prior behavior where this function never surfaced errors.
       }
     }
 
@@ -328,13 +393,11 @@ export const ClientProvider = ({ children }) => {
       const currentList = prev[currentAudit] || [];
       const updatedList = currentList.map(c => {
         if (c.id === controlId) {
+          const newFiles = (c.evidenceFiles || []).filter(f => f.evidenceItemId !== evidenceItemId);
           return {
             ...c,
-            evidenceFile: null,
-            evidenceSize: null,
-            evidenceDate: null,
-            evidenceItemId: null,
-            status: 'Action Required',
+            evidenceFiles: newFiles,
+            status: newFiles.length > 0 ? 'In Progress' : 'Action Required',
           };
         }
         return c;
@@ -415,6 +478,7 @@ export const ClientProvider = ({ children }) => {
     <ClientContext.Provider value={{
       currentUser,
       assignedAudits,
+      clientAudits,
       currentAudit,
       controls,
       findings,
@@ -428,7 +492,8 @@ export const ClientProvider = ({ children }) => {
       deleteEvidence,
       addReplyToFinding,
       updateProfile,
-      updatePreferences
+      updatePreferences,
+      fetchClientData,
     }}>
       {children}
     </ClientContext.Provider>

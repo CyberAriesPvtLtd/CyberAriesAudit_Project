@@ -20,7 +20,7 @@ class EvidenceItemConfirm(BaseModel):
     storage_key: str
     file_size: Optional[int] = None
     mime_type: Optional[str] = None
-    evidence_type_id: Optional[str] = None
+
     uploaded_by: str
     company_id: str
     # Control this upload was made from - used to also create the direct
@@ -30,11 +30,19 @@ class EvidenceItemConfirm(BaseModel):
 
 class EvidenceItemUpdate(BaseModel):
     file_name: Optional[str] = None
-    evidence_type_id: Optional[str] = None
+
     ai_notes: Optional[str] = None
     auditor_notes: Optional[str] = None
     status: Optional[str] = None
+    reviewed_by: Optional[str] = None
 
+
+class EvidenceItemUserResponse(BaseModel):
+    id: str
+    name: str
+
+    class Config:
+        from_attributes = True
 
 class EvidenceItemResponse(BaseModel):
     id: str
@@ -46,8 +54,11 @@ class EvidenceItemResponse(BaseModel):
     auditor_notes: Optional[str] = None
     status: str
     company_id: str
-    evidence_type_id: Optional[str] = None
+
     uploaded_by: str
+    user: Optional[EvidenceItemUserResponse] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
     created_at: datetime
 
     class Config:
