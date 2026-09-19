@@ -101,6 +101,7 @@ export const AuthProvider = ({ children }) => {
           }
 
           newAuditsData[companyName][auditName] = {
+            frameworkId: fw.id,
             stats: {
               assigned: assignedControls.length,
               pending,
@@ -244,6 +245,7 @@ export const AuthProvider = ({ children }) => {
   // Get active selected data
   const clientData = auditsData[selectedClient] || {};
   const activeAuditData = clientData[selectedAudit] || {
+    frameworkId: null,
     stats: { assigned: 0, pending: 0, completed: 0, aiReview: 0 },
     evidence: [],
     findings: [],

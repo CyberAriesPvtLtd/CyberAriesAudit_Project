@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import ExcelTable from '../components/ExcelTable';
 import Modal from '../components/Modal';
 import AuditDetailsPage from '../components/AuditDetailsPage';
+import { downloadAuditReport } from '../services/api';
 import { ClipboardList, Edit, Trash2, UserPlus, Eye, Users, X, ChevronDown, Search } from 'lucide-react';
 
 // Dropdown values (FRAMEWORKS, CATEGORIES, SUBCATEGORIES) are now dynamic —
@@ -226,6 +227,16 @@ export default function AuditManagement() {
     { label: 'Manage Controls', onClick: (row) => navigate(`/audits/${row.id}`) },
     { label: 'Reassign Auditor', onClick: (row) => handleOpenReassignAuditor(row) },
     { label: 'View Specifications', onClick: (row) => handleOpenViewDetails(row) },
+    {
+      label: 'Generate Report',
+      onClick: async (row) => {
+        try {
+          await downloadAuditReport(row.id);
+        } catch (err) {
+          alert(err.message || 'Failed to generate report.');
+        }
+      },
+    },
     { label: 'Delete', onClick: (row) => handleDeleteAudit(row) },
   ];
 

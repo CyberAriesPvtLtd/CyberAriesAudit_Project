@@ -111,6 +111,67 @@ export const updateEvidenceStatus = async (evidenceItemId, status, userId) => {
   return data;
 };
 
+// ─── Report Generation ────────────────────────────────────────────
+
+/*
+ * Downloads the generated .docx audit report for a framework.
+ *
+ * Fetched as a blob through axios (NOT window.open) so the JWT travels in the
+ * Authorization header instead of the URL, where it would leak into browser
+ * history and server logs.
+ *
+ * With responseType 'blob', error responses (401/403/400/404) also arrive as a
+ * Blob, so the JSON `detail` message has to be parsed out of it manually.
+ */
+export const downloadAuditReport = async (frameworkId) => {
+  try {
+    const response = await axiosClient.get(`/reports/generate/${frameworkId}`, {
+      responseType: 'blob',
+    });
+
+    // Filename comes from the Content-Disposition header the backend sets.
+    const disposition = response.headers['content-disposition'] || '';
+    const match = disposition.match(/filename="?([^";]+)"?/i);
+    const fileName = match ? match[1] : 'Audit_Report.docx';
+
+    const url = window.URL.createObjectURL(response.data);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', fileName);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+
+    return fileName;
+  } catch (err) {
+    let message = err.message || 'Failed to generate report.';
+    const body = err.response?.data;
+
+    // In browsers the error body arrives as a Blob (because of responseType
+    // 'blob'); in other environments it can already be a string or an object.
+    // Normalise all three to text, then pull out FastAPI's `detail` field.
+    try {
+      let text = null;
+      if (typeof Blob !== 'undefined' && body instanceof Blob) {
+        text = await body.text();
+      } else if (typeof body === 'string') {
+        text = body;
+      } else if (body && typeof body === 'object' && body.detail) {
+        text = JSON.stringify(body);
+      }
+
+      if (text) {
+        const parsed = JSON.parse(text);
+        if (typeof parsed.detail === 'string') message = parsed.detail;
+      }
+    } catch {
+      /* body was not JSON - keep the fallback message */
+    }
+    throw new Error(message);
+  }
+};
+
 // Default export for convenience
 const api = {
   login,
@@ -125,6 +186,7 @@ const api = {
   getEvidenceDownloadUrl,
   updateEvidenceNotes,
   updateEvidenceStatus,
+  downloadAuditReport,
 };
 
 export default api;

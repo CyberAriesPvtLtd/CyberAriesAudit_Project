@@ -40,4 +40,4 @@ PyJWT==2.13.0
 openpyxl==3.1.5
 python-multipart==0.0.20
 minio==7.2.4  
- 
+docxtpl==0.18.0 

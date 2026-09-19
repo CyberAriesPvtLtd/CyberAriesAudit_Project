@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Modal from './Modal';
+import { downloadAuditReport } from '../services/api';
 import { 
   ArrowLeft, 
   Search, 
@@ -17,7 +18,8 @@ import {
   Calendar,
   Building,
   Shield,
-  Activity
+  Activity,
+  FileText
 } from 'lucide-react';
 
 export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp, onOpenEdit }) {
@@ -56,6 +58,21 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
       onBackProp();
     } else {
       navigate('/audit-management');
+    }
+  };
+
+  // ── Report generation ──
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
+
+  const handleGenerateReport = async () => {
+    if (isGeneratingReport) return;
+    setIsGeneratingReport(true);
+    try {
+      await downloadAuditReport(audit.id);
+    } catch (err) {
+      alert(err.message || 'Failed to generate report.');
+    } finally {
+      setIsGeneratingReport(false);
     }
   };
 
@@ -265,11 +282,22 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
           </div>
         </div>
 
-        {onOpenEdit && (
-          <button className="btn btn-outline" onClick={() => onOpenEdit(audit)} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
-            <Edit size={14} /> Edit Audit Specifications
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <button
+            className="btn btn-primary"
+            onClick={handleGenerateReport}
+            disabled={isGeneratingReport}
+            style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', opacity: isGeneratingReport ? 0.7 : 1 }}
+          >
+            <FileText size={14} /> {isGeneratingReport ? 'Generating...' : 'Generate Report'}
           </button>
-        )}
+
+          {onOpenEdit && (
+            <button className="btn btn-outline" onClick={() => onOpenEdit(audit)} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px' }}>
+              <Edit size={14} /> Edit Audit Specifications
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── 8. AUDIT SUMMARY METRICS ── */}

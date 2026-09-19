@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
+from app.routers.report_router import router as report_router
 
 from app.database import Base, engine, SessionLocal
 from app.utils.seed import seed_default_admin
@@ -66,7 +67,7 @@ app.include_router(audit_framework_router)
 app.include_router(controls_router)
 app.include_router(audit_control_router)
 app.include_router(evidence_files_router)
-
+app.include_router(report_router)
 
 @app.get("/")
 def home():
