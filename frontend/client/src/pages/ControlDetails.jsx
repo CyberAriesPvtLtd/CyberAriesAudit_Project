@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useClient } from '../context/ClientContext';
 import { useLocation, Link, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Upload, FileText, Download, Trash2, Eye, AlertTriangle, ShieldCheck, FileCheck, Loader } from 'lucide-react';
+import { ArrowLeft, Upload, FileText, Download, Trash2, Eye, AlertTriangle, ShieldCheck, FileCheck, Loader, Clock } from 'lucide-react';
 import { getEvidenceDownloadUrl } from '../services/api';
 import Modal from '../components/Modal';
 
@@ -21,11 +21,6 @@ export default function ControlDetails() {
   const requirements = control ? control.requiredEvidence.split(',').map(s => s.trim()) : [];
 
   // ─── Uploaded files state ───────────────────────────────────────
-  // IMPORTANT: We derive the initial state from the control's evidence
-  // data (which comes from the backend via ClientContext). We do NOT
-  // also persist to localStorage, which was causing the "duplicate row"
-  // bug — the file appeared once from localStorage and once from the
-  // context's control.evidenceFile.
   const buildFilesFromControl = () => {
     if (!control || !control.evidenceFiles) return [];
     return control.evidenceFiles.map((file, idx) => ({
@@ -34,13 +29,15 @@ export default function ControlDetails() {
       date: file.date,
       type: file.type,
       uploadedBy: file.uploadedBy,
-      status: file.status,
+      status: file.status || 'Pending Review',
+      auditorNotes: file.auditorNotes || file.auditor_notes || '',
       requirement: requirements[idx] || 'Deliverable',
       evidenceItemId: file.evidenceItemId,
     }));
   };
 
   const [uploadedFiles, setUploadedFiles] = useState(buildFilesFromControl);
+  const [fileToReplace, setFileToReplace] = useState(null);
 
   // Sync from control whenever it changes (e.g. after a fresh fetch)
   useEffect(() => {
@@ -161,12 +158,27 @@ export default function ControlDetails() {
       date: new Date().toISOString().split('T')[0],
       type: extension.toUpperCase(),
       uploadedBy: currentUser?.fullName || 'Client',
-      status: 'Uploaded',
+      status: 'Pending Review',
+      auditorNotes: '',
       requirement: reqToAssign,
       evidenceItemId: result.evidenceItemId,
     };
 
-    setUploadedFiles(prevFiles => [...prevFiles, newFile]);
+    if (fileToReplace) {
+      if (fileToReplace.evidenceItemId) {
+        deleteEvidence(control.id, fileToReplace.evidenceItemId);
+      }
+      setUploadedFiles(prevFiles => prevFiles.map(f => {
+        if (f.evidenceItemId === fileToReplace.evidenceItemId || f.name === fileToReplace.name) {
+          return newFile;
+        }
+        return f;
+      }));
+      setFileToReplace(null);
+    } else {
+      setUploadedFiles(prevFiles => [...prevFiles, newFile]);
+    }
+
     setSuccessNotification(true);
     setActiveReqForUpload(null);
   };
@@ -177,6 +189,13 @@ export default function ControlDetails() {
 
   const handleUploadNowClick = (requirementName) => {
     setActiveReqForUpload(requirementName);
+    setFileToReplace(null);
+    triggerFileSelect();
+  };
+
+  const handleReuploadClick = (fileItem) => {
+    setActiveReqForUpload(fileItem.requirement || 'Reuploaded Evidence');
+    setFileToReplace(fileItem);
     triggerFileSelect();
   };
 
@@ -228,6 +247,31 @@ export default function ControlDetails() {
       case 'In Progress': return 'badge badge-in_progress';
       case 'Action Required': return 'badge badge-action-required';
       default: return 'badge';
+    }
+  };
+
+  const renderEvidenceStatusBadge = (status) => {
+    switch (status) {
+      case 'Approved':
+        return (
+          <span className="badge badge-completed" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#E6F4EA', color: '#137333', border: '1px solid #A3E635' }}>
+            <FileCheck size={12} /> Approved
+          </span>
+        );
+      case 'Rejected':
+        return (
+          <span className="badge" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#FCE8E6', color: '#C5221F', border: '1px solid #FCA5A5' }}>
+            <AlertTriangle size={12} /> Rejected
+          </span>
+        );
+      case 'Pending Review':
+      case 'Pending':
+      default:
+        return (
+          <span className="badge badge-in_progress" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', backgroundColor: '#FEF7E0', color: '#B06000', border: '1px solid #FDE68A' }}>
+            <Clock size={12} /> Pending Review
+          </span>
+        );
     }
   };
 
@@ -329,66 +373,113 @@ export default function ControlDetails() {
                   </thead>
                   <tbody>
                     {uploadedFiles.map((file, idx) => (
-                      <tr key={`${file.name}-${idx}`}>
-                        <td style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                            <FileText size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
-                            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '240px' }} title={file.name}>
-                              {file.name}
+                      <React.Fragment key={`${file.name}-${idx}`}>
+                        <tr style={file.status === 'Rejected' ? { borderBottom: 'none' } : {}}>
+                          <td style={{ fontWeight: '600', color: 'var(--text-primary)' }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <FileText size={16} style={{ color: 'var(--primary)', flexShrink: 0 }} />
+                              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '240px' }} title={file.name}>
+                                {file.name}
+                              </span>
+                            </div>
+                            <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: '400', marginTop: '2px' }}>
+                              Requirement: {file.requirement}
                             </span>
-                          </div>
-                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', display: 'block', fontWeight: '400', marginTop: '2px' }}>
-                            Requirement: {file.requirement}
-                          </span>
-                        </td>
-                        <td>
-                          <span style={{ fontSize: '11.5px', padding: '2px 6px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)', fontWeight: '600', color: 'var(--text-secondary)' }}>
-                            {file.type}
-                          </span>
-                        </td>
-                        <td>{file.size}</td>
-                        <td>{file.date}</td>
-                        <td>{file.uploadedBy}</td>
-                        <td>
-                          <span className="badge badge-completed" style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
-                            <FileCheck size={12} /> {file.status}
-                          </span>
-                        </td>
-                        <td>
-                          <div style={{ display: 'flex', gap: '8px', whiteSpace: 'nowrap' }}>
-                            <button 
-                              className="btn btn-secondary" 
-                              style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              onClick={() => handlePreviewFile(file)}
-                              title="Preview"
-                            >
-                              <Eye size={16} />
-                            </button>
+                          </td>
+                          <td>
+                            <span style={{ fontSize: '11.5px', padding: '2px 6px', backgroundColor: 'var(--bg-main)', borderRadius: 'var(--radius-sm)', fontWeight: '600', color: 'var(--text-secondary)' }}>
+                              {file.type}
+                            </span>
+                          </td>
+                          <td>{file.size}</td>
+                          <td>{file.date}</td>
+                          <td>{file.uploadedBy}</td>
+                          <td>
+                            {renderEvidenceStatusBadge(file.status)}
+                          </td>
+                          <td>
+                            <div style={{ display: 'flex', gap: '8px', whiteSpace: 'nowrap' }}>
+                              <button 
+                                className="btn btn-secondary" 
+                                style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={() => handlePreviewFile(file)}
+                                title="Preview"
+                              >
+                                <Eye size={16} />
+                              </button>
 
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              onClick={() => handleDownloadFile(file)}
-                              title="Download"
-                            >
-                              <Download size={16} />
-                            </button>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={() => handleDownloadFile(file)}
+                                title="Download"
+                              >
+                                <Download size={16} />
+                              </button>
 
-                            <button
-                              className="btn btn-secondary"
-                              style={{ padding: '8px', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-                              onClick={() => {
-                                if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
-                                  handleDeleteFile(file);
-                                }
-                              }}
-                              title="Delete"
-                            >
-                              <Trash2 size={16} />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
+                              <button
+                                className="btn btn-secondary"
+                                style={{ padding: '8px', color: 'var(--primary)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+                                onClick={() => {
+                                  if (confirm(`Are you sure you want to delete "${file.name}"?`)) {
+                                    handleDeleteFile(file);
+                                  }
+                                }}
+                                title="Delete"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+
+                        {/* Rejected Alert Box below evidence item with Auditor Feedback and Reupload option */}
+                        {file.status === 'Rejected' && (
+                          <tr key={`rejected-alert-${idx}`}>
+                            <td colSpan={7} style={{ padding: '8px 16px 16px 16px', backgroundColor: 'var(--bg-card, #FFF)' }}>
+                              <div style={{
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'space-between',
+                                backgroundColor: '#FEF2F2',
+                                border: '1px solid #FCA5A5',
+                                borderRadius: '8px',
+                                padding: '12px 16px',
+                                gap: '16px'
+                              }}>
+                                <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px', flex: 1 }}>
+                                  <AlertTriangle size={20} style={{ color: '#C5221F', marginTop: '2px', flexShrink: 0 }} />
+                                  <div>
+                                    <div style={{ fontWeight: '700', fontSize: '13.5px', color: '#991B1B', marginBottom: '2px' }}>
+                                      Evidence Rejected by Auditor
+                                    </div>
+                                    <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
+                                      <strong>Auditor Feedback:</strong> {file.auditorNotes || 'Auditor rejected this evidence. Please re-upload corrected documentation.'}
+                                    </div>
+                                  </div>
+                                </div>
+                                <button
+                                  className="btn btn-primary"
+                                  style={{
+                                    backgroundColor: '#C5221F',
+                                    borderColor: '#C5221F',
+                                    whiteSpace: 'nowrap',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: '6px',
+                                    padding: '8px 14px',
+                                    fontSize: '12.5px',
+                                    flexShrink: 0
+                                  }}
+                                  onClick={() => handleReuploadClick(file)}
+                                >
+                                  <Upload size={14} /> Reupload Evidence
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     ))}
                   </tbody>
                 </table>

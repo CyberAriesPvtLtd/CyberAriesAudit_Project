@@ -142,7 +142,8 @@ export const ClientProvider = ({ children }) => {
                       date: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                       type: item.file_name.split('.').pop().toUpperCase(),
                       uploadedBy: item.uploaded_by || 'Client',
-                      status: 'Uploaded',
+                      status: item.status || 'Pending Review',
+                      auditorNotes: item.auditor_notes || '',
                       evidenceItemId: item.id,
                       linkId: link.id, // the AuditControlEvidence link id
                     };
@@ -323,7 +324,7 @@ export const ClientProvider = ({ children }) => {
                   date: new Date().toISOString().split('T')[0],
                   type: fileName.split('.').pop().toUpperCase(),
                   uploadedBy: currentUser?.fullName || 'Client',
-                  status: 'Uploaded',
+                  status: 'Pending Review',
                   evidenceItemId: result.evidence.id
                 }
               ]

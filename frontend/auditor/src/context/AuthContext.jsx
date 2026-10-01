@@ -174,9 +174,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateEvidenceStatus = async (evidenceId, newStatus) => {
+  const updateEvidenceStatus = async (evidenceId, newStatus, notes = null) => {
     try {
       await api.updateEvidenceStatus(evidenceId, newStatus, user?.id);
+      if (notes !== null) {
+        await api.updateEvidenceNotes(evidenceId, notes);
+      }
     } catch (err) {
       console.error("Failed to update evidence status:", err);
       return;
@@ -189,7 +192,44 @@ export const AuthProvider = ({ children }) => {
 
       const updatedList = list.map(ev => {
         if (ev.id === evidenceId) {
-          return { ...ev, status: newStatus };
+          return {
+            ...ev,
+            status: newStatus,
+            ...(notes !== null ? { auditor_notes: notes } : {})
+          };
+        }
+        return ev;
+      });
+
+      return {
+        ...prev,
+        [selectedClient]: {
+          ...clientData,
+          [selectedAudit]: {
+            ...auditData,
+            evidence: updatedList
+          }
+        }
+      };
+    });
+  };
+
+  const updateEvidenceNotes = async (evidenceId, notes) => {
+    try {
+      await api.updateEvidenceNotes(evidenceId, notes);
+    } catch (err) {
+      console.error("Failed to update evidence notes:", err);
+      return;
+    }
+
+    setAuditsData(prev => {
+      const clientData = prev[selectedClient] || {};
+      const auditData = clientData[selectedAudit] || {};
+      const list = auditData.evidence || [];
+
+      const updatedList = list.map(ev => {
+        if (ev.id === evidenceId) {
+          return { ...ev, auditor_notes: notes };
         }
         return ev;
       });
@@ -264,6 +304,7 @@ export const AuthProvider = ({ children }) => {
     switchClient,
     switchAudit,
     updateEvidenceStatus,
+    updateEvidenceNotes,
     login,
     logout
   };
