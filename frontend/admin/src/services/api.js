@@ -10,6 +10,21 @@ const axiosClient = axios.create({
   },
 });
 
+axiosClient.interceptors.request.use((config) => {
+  const token = localStorage.getItem('cyberaries_token');
+  if (token) {
+    if (config.headers.set) {
+      config.headers.set('Authorization', `Bearer ${token}`);
+    } else {
+      config.headers['Authorization'] = `Bearer ${token}`;
+    }
+  }
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
+
+
 // ─── Health Check ───────────────────────────────────────────────
 
 export const testDbConnection = async () => {
@@ -109,6 +124,66 @@ export const deleteUser = async (id) => {
   return data;
 };
 
+// ─── Controls Endpoints ───────────────────────────────────────────
+
+export const getControls = async () => {
+  const { data } = await axiosClient.get('/controls/');
+  return data;
+};
+
+export const createControl = async (controlData) => {
+  const { data } = await axiosClient.post('/controls/', controlData);
+  return data;
+};
+
+export const uploadControlsExcel = async (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  const { data } = await axiosClient.post('/controls/upload-excel', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+  return data;
+};
+
+// ─── Audit Framework Endpoints ────────────────────────────────────
+
+export const getAuditFrameworks = async () => {
+  const { data } = await axiosClient.get('/audit-framework/');
+  return data;
+};
+
+export const getAuditFrameworkById = async (id) => {
+  const { data } = await axiosClient.get(`/audit-framework/${id}`);
+  return data;
+};
+
+export const createAuditFramework = async (frameworkData) => {
+  const { data } = await axiosClient.post('/audit-framework/', frameworkData);
+  return data;
+};
+
+export const updateAuditFramework = async (id, updates) => {
+  const { data } = await axiosClient.put(`/audit-framework/${id}`, updates);
+  return data;
+};
+
+export const deleteAuditFramework = async (id) => {
+  const { data } = await axiosClient.delete(`/audit-framework/${id}`);
+  return data;
+};
+
+// ─── Audit Control Endpoints ──────────────────────────────────────
+
+export const getAuditControlsByFramework = async (frameworkId) => {
+  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
+  return data;
+};
+
+export const updateAuditControl = async (id, updates) => {
+  const { data } = await axiosClient.put(`/audit-control/${id}`, updates);
+  return data;
+};
+
 // Default export for convenience
 const api = {
   testDbConnection,
@@ -125,6 +200,16 @@ const api = {
   deleteUser,
   login,
   changePassword,
+  getControls,
+  createControl,
+  uploadControlsExcel,
+  getAuditFrameworks,
+  getAuditFrameworkById,
+  createAuditFramework,
+  updateAuditFramework,
+  deleteAuditFramework,
+  getAuditControlsByFramework,
+  updateAuditControl,
 };
 
 export default api;

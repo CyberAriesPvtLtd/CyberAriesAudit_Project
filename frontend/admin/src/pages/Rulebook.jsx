@@ -2,24 +2,21 @@ import React, { useState, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import ExcelTable from '../components/ExcelTable';
 import Modal from '../components/Modal';
-import { 
-  FileSpreadsheet, 
-  UploadCloud, 
-  CheckCircle2, 
-  AlertCircle, 
-  FileText, 
-  ExternalLink, 
-  X, 
+import {
+  FileSpreadsheet,
+  UploadCloud,
+  CheckCircle2,
+  AlertCircle,
+  FileText,
+  ExternalLink,
+  X,
   Check,
   ChevronRight,
   Info
 } from 'lucide-react';
-import * as XLSX from 'xlsx';
-import { 
-  formatDateDDMMYYYY, 
-  CONTROL_DOMAINS, 
-  FRAMEWORK_TYPES, 
-  FRAMEWORK_CATEGORIES 
+
+import {
+  formatDateDDMMYYYY
 } from '../data/frameworkRulesData';
 
 export default function Rulebook() {
@@ -99,7 +96,7 @@ export default function Rulebook() {
     }
   };
 
-  // Parse Excel File & Upload
+  // Upload Excel File to Backend
   const handleUploadSubmit = async (e) => {
     e.preventDefault();
 
@@ -109,76 +106,19 @@ export default function Rulebook() {
     }
 
     try {
-      const parsedRules = await parseExcelData(selectedFile, referenceLink, description);
-      uploadFramework(parsedRules);
-      showToast('Framework Excel uploaded and processed successfully!');
+      // Send the file directly to the backend — all parsing, normalization,
+      // and pointer indexing happens server-side in seed_controls.py
+      const result = await uploadFramework(selectedFile);
+      showToast(`Framework uploaded — ${result.inserted} controls inserted, ${result.updated} updated.`);
       handleCloseUploadModal();
     } catch (err) {
-      console.error('Failed to parse framework excel:', err);
-      setValidationError('Failed to parse Excel file. Please ensure it is a valid .xlsx or .xls document.');
+      console.error('Failed to upload framework excel:', err);
+      const detail = err?.response?.data?.detail || 'Failed to upload Excel file. Please check the file format.';
+      setValidationError(detail);
     }
   };
 
-  const parseExcelData = (file, refLink, desc) => {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        try {
-          const data = new Uint8Array(e.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const firstSheetName = workbook.SheetNames[0];
-          const worksheet = workbook.Sheets[firstSheetName];
-          const jsonRows = XLSX.utils.sheet_to_json(worksheet);
 
-          const today = new Date();
-          const dd = String(today.getDate()).padStart(2, '0');
-          const mm = String(today.getMonth() + 1).padStart(2, '0');
-          const yyyy = today.getFullYear();
-          const formattedDate = `${dd}-${mm}-${yyyy}`;
-
-          if (jsonRows && jsonRows.length > 0) {
-            const parsed = jsonRows.map((row, index) => ({
-              id: `FR-${Date.now()}-${index}`,
-              frameworkRules: row['Framework Rules'] || row['Framework Rule'] || row['Rule'] || row['Control Name'] || `FR-${index + 1}: ${file.name.replace(/\.[^/.]+$/, '')} Standard`,
-              controlDomain: row['Control Domain'] || row['Domain'] || 'Govern (GV)',
-              frameworkType: row['Framework Type'] || row['Type'] || row['Framework'] || 'SEBI CSCRF',
-              frameworkCategory: row['Framework Category'] || row['Category'] || 'Governance & Risk Management',
-              frameworkSubcategory: row['Framework Subcategory'] || row['Subcategory'] || 'Cybersecurity Policy & Strategy',
-              description: row['Description'] || desc || 'Imported framework rule from uploaded excel specification file.',
-              primaryDocuments: row['Primary Documents'] 
-                ? (Array.isArray(row['Primary Documents']) ? row['Primary Documents'] : String(row['Primary Documents']).split(',').map(s => s.trim())) 
-                : [file.name],
-              secondaryDocuments: row['Secondary Documents'] 
-                ? (Array.isArray(row['Secondary Documents']) ? row['Secondary Documents'] : String(row['Secondary Documents']).split(',').map(s => s.trim())) 
-                : (refLink ? [refLink] : ['Framework_Mapping_Doc.pdf']),
-              lastUpdated: row['Last Updated'] || formattedDate,
-              referenceLink: refLink || row['Reference Link'] || ''
-            }));
-            resolve(parsed);
-          } else {
-            const fallback = [{
-              id: `FR-${Date.now()}-1`,
-              frameworkRules: `FR-001: ${file.name.replace(/\.[^/.]+$/, '')} Framework Rule`,
-              controlDomain: 'Govern (GV)',
-              frameworkType: 'SEBI CSCRF',
-              frameworkCategory: 'Governance & Risk Management',
-              frameworkSubcategory: 'Cybersecurity Policy & Strategy',
-              description: desc || `Uploaded compliance framework rule set derived from file ${file.name}.`,
-              primaryDocuments: [file.name],
-              secondaryDocuments: refLink ? [refLink] : ['Compliance_Audit_Spec.pdf'],
-              lastUpdated: formattedDate,
-              referenceLink: refLink || ''
-            }];
-            resolve(fallback);
-          }
-        } catch (err) {
-          reject(err);
-        }
-      };
-      reader.onerror = (error) => reject(error);
-      reader.readAsArrayBuffer(file);
-    });
-  };
 
   const formatFileSize = (bytes) => {
     if (!bytes) return '0 Bytes';
@@ -240,8 +180,12 @@ export default function Rulebook() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '5px', maxWidth: '160px', overflow: 'hidden' }}>
         <span
           className={`compact-doc-chip ${isPrimary ? 'primary-chip' : 'secondary-chip'}`}
-          title={firstDoc}
-          style={{ maxWidth: '110px', flexShrink: 1 }}
+          title="Click to view documents"
+          onClick={(e) => {
+            e.stopPropagation();
+            setViewingDocumentsRow(row);
+          }}
+          style={{ maxWidth: '110px', flexShrink: 1, cursor: 'pointer' }}
         >
           <FileText size={11} style={{ flexShrink: 0 }} />
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{firstDoc}</span>
@@ -274,19 +218,41 @@ export default function Rulebook() {
       sortable: true,
       width: '210px',
       cell: (row) => {
-        const fullText = row.frameworkRules || '';
-        const parts = fullText.split(':');
-        const code = parts[0]?.trim();
-        const name = parts.length > 1 ? parts.slice(1).join(':').trim() : fullText;
+        // Prefer the array; fall back to splitting the comma-joined string
+        const rulesArray = Array.isArray(row.frameworkRulesList) && row.frameworkRulesList.length > 0
+          ? row.frameworkRulesList
+          : (row.frameworkRules ? String(row.frameworkRules).split(',').map(r => r.trim()).filter(Boolean) : []);
+
+        if (rulesArray.length === 0) {
+          return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>—</span>;
+        }
 
         return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '2px', maxWidth: '195px', overflow: 'hidden' }}>
-            <span style={{ fontWeight: '700', fontSize: '13px', color: 'var(--text-primary)', fontFamily: 'monospace', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {code}
-            </span>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={name}>
-              {name}
-            </span>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', maxWidth: '195px' }}>
+            {rulesArray.map((rule, idx) => (
+              <span
+                key={idx}
+                title={rule}
+                style={{
+                  backgroundColor: 'rgba(99,102,241,0.08)',
+                  border: '1px solid rgba(99,102,241,0.25)',
+                  color: 'var(--accent-primary, #6366F1)',
+                  padding: '2px 7px',
+                  borderRadius: '4px',
+                  fontSize: '11.5px',
+                  fontFamily: 'monospace',
+                  fontWeight: '700',
+                  letterSpacing: '0.03em',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  display: 'inline-block',
+                  maxWidth: '190px',
+                }}
+              >
+                {rule}
+              </span>
+            ))}
           </div>
         );
       }
@@ -354,7 +320,7 @@ export default function Rulebook() {
             <span style={{ fontSize: '12px', color: 'var(--text-secondary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={text}>
               {text}
             </span>
-            <button 
+            <button
               type="button"
               className="read-more-btn"
               onClick={(e) => {
@@ -396,23 +362,33 @@ export default function Rulebook() {
   ];
 
   // ----------------------------------------------------
-  // SEARCH & FILTERS
+  // SEARCH & FILTERS (Dynamic)
   // ----------------------------------------------------
+  const dynamicFrameworkTypes = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))];
+  const dynamicControlDomains = [...new Set(rulebook.map(r => r.controlDomain).filter(Boolean))];
+  const dynamicFrameworkCategories = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))];
+  const dynamicFrameworkSubcategories = [...new Set(rulebook.map(r => r.frameworkSubcategory).filter(Boolean))];
+
   const filterOptions = [
     {
       label: 'Framework Type',
       key: 'frameworkType',
-      options: FRAMEWORK_TYPES
+      options: dynamicFrameworkTypes
     },
     {
       label: 'Control Domain',
       key: 'controlDomain',
-      options: CONTROL_DOMAINS
+      options: dynamicControlDomains
     },
     {
       label: 'Framework Category',
       key: 'frameworkCategory',
-      options: FRAMEWORK_CATEGORIES
+      options: dynamicFrameworkCategories
+    },
+    {
+      label: 'Framework Subcategory',
+      key: 'frameworkSubcategory',
+      options: dynamicFrameworkSubcategories
     }
   ];
 
@@ -439,7 +415,7 @@ export default function Rulebook() {
         }}>
           <CheckCircle2 size={18} color="#4ADE80" />
           <span>{toastMessage}</span>
-          <button 
+          <button
             onClick={() => setToastMessage('')}
             style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', marginLeft: '8px' }}
           >
@@ -484,7 +460,7 @@ export default function Rulebook() {
             </label>
 
             {!selectedFile ? (
-              <div 
+              <div
                 className={`excel-upload-dropzone ${isDragging ? 'drag-active' : ''}`}
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
@@ -498,7 +474,7 @@ export default function Rulebook() {
                   onChange={handleInputChange}
                   style={{ display: 'none' }}
                 />
-                
+
                 <div className="excel-upload-icon-wrapper">
                   <UploadCloud size={28} />
                 </div>
@@ -506,8 +482,8 @@ export default function Rulebook() {
                 <div style={{ textAlign: 'center' }}>
                   <p className="excel-upload-title">Drag & Drop Excel File Here</p>
                   <p className="excel-upload-subtitle" style={{ margin: '4px 0 10px 0' }}>or click to browse your computer</p>
-                  <button 
-                    type="button" 
+                  <button
+                    type="button"
                     className="btn btn-secondary"
                     style={{ fontSize: '13px', padding: '6px 14px' }}
                     onClick={(e) => {
@@ -519,7 +495,7 @@ export default function Rulebook() {
                     Browse File
                   </button>
                 </div>
-                
+
                 <p style={{ fontSize: '11.5px', color: 'var(--text-muted)', marginTop: '4px' }}>
                   Supports: .xlsx, .xls
                 </p>
@@ -637,9 +613,9 @@ export default function Rulebook() {
       </Modal>
 
       {/* MODAL 2: Full Description Viewer Modal */}
-      <Modal 
-        isOpen={!!viewingDescriptionRow} 
-        onClose={() => setViewingDescriptionRow(null)} 
+      <Modal
+        isOpen={!!viewingDescriptionRow}
+        onClose={() => setViewingDescriptionRow(null)}
         title="Full Framework Rule Description"
       >
         {viewingDescriptionRow && (
@@ -658,10 +634,10 @@ export default function Rulebook() {
               {renderDomainBadge(viewingDescriptionRow.controlDomain)}
             </div>
 
-            <div style={{ 
-              backgroundColor: '#F8FAFC', 
-              border: '1px solid var(--border-color)', 
-              borderRadius: 'var(--radius-md)', 
+            <div style={{
+              backgroundColor: '#F8FAFC',
+              border: '1px solid var(--border-color)',
+              borderRadius: 'var(--radius-md)',
               padding: '16px',
               fontSize: '13.5px',
               color: 'var(--text-primary)',
@@ -692,9 +668,9 @@ export default function Rulebook() {
       </Modal>
 
       {/* MODAL 3: All Documents Viewer Modal */}
-      <Modal 
-        isOpen={!!viewingDocumentsRow} 
-        onClose={() => setViewingDocumentsRow(null)} 
+      <Modal
+        isOpen={!!viewingDocumentsRow}
+        onClose={() => setViewingDocumentsRow(null)}
         title="Framework Rule Documents Registry"
       >
         {viewingDocumentsRow && (

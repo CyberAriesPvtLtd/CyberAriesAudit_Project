@@ -190,10 +190,12 @@ export default function ExcelTable({
   return (
     <div className="excel-table-container">
       {/* Table Toolbar */}
-      <div className="table-toolbar">
-        <div className="toolbar-left">
+      <div className="table-toolbar" style={{ display: 'flex', flexDirection: 'column', alignItems: 'stretch', gap: '16px' }}>
+        
+        {/* Top Row: Search & Actions */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%', gap: '16px', flexWrap: 'wrap' }}>
           {searchKeys.length > 0 && (
-            <div className="table-search-wrapper">
+            <div className="table-search-wrapper" style={{ flex: 1, minWidth: '250px', maxWidth: '400px' }}>
               <Search size={16} className="table-search-icon" />
               <input
                 type="text"
@@ -201,34 +203,46 @@ export default function ExcelTable({
                 placeholder={searchPlaceholder}
                 value={searchQuery}
                 onChange={handleSearchChange}
+                style={{ width: '100%' }}
               />
             </div>
           )}
-
-          {filterOptions.map(filter => (
-            <select
-              key={filter.key}
-              className="table-filter-select"
-              value={activeFilters[filter.key] || ''}
-              onChange={(e) => handleFilterChange(filter.key, e.target.value)}
-            >
-              <option value="">{`Filter by ${filter.label}`}</option>
-              <option value="All">All</option>
-              {filter.options.map(opt => (
-                <option key={opt} value={opt}>{opt}</option>
-              ))}
-            </select>
-          ))}
+          
+          <div className="toolbar-right" style={{ display: 'flex', gap: '8px', marginLeft: searchKeys.length > 0 ? 'auto' : '0' }}>
+            <button onClick={handleExportCSV} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '13px' }}>
+              <Download size={14} /> Export CSV
+            </button>
+            <button onClick={handleExportExcel} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '13px' }}>
+              <Download size={14} /> Export Excel
+            </button>
+          </div>
         </div>
 
-        <div className="toolbar-right">
-          <button onClick={handleExportCSV} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '13px' }}>
-            <Download size={14} /> Export CSV
-          </button>
-          <button onClick={handleExportExcel} className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '13px' }}>
-            <Download size={14} /> Export Excel
-          </button>
-        </div>
+        {/* Bottom Row: Filters Grid */}
+        {filterOptions.length > 0 && (
+          <div style={{ 
+            display: 'grid', 
+            gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', 
+            gap: '12px',
+            width: '100%'
+          }}>
+            {filterOptions.map(filter => (
+              <select
+                key={filter.key}
+                className="table-filter-select"
+                style={{ width: '100%' }}
+                value={activeFilters[filter.key] || ''}
+                onChange={(e) => handleFilterChange(filter.key, e.target.value)}
+              >
+                <option value="">{`Filter by ${filter.label}`}</option>
+                <option value="All">All</option>
+                {filter.options.map(opt => (
+                  <option key={opt} value={opt}>{opt}</option>
+                ))}
+              </select>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Table Element */}

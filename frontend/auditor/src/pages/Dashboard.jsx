@@ -1,10 +1,19 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 import { ClipboardList, Clock, CheckCircle, Cpu, Activity, ArrowRight, Calendar, Users } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import api from '../services/api';
 
 const Dashboard = () => {
-  const { assignedClients, clientAuditsMapping, selectedClient, selectedAudit, activeAuditData } = useAuth();
+  const {
+    assignedClients,
+    clientAuditsMapping,
+    selectedClient,
+    selectedAudit,
+    activeAuditData,
+    user
+  } = useAuth();
+
 
   const totalClients = assignedClients.length;
   const totalAudits = Object.values(clientAuditsMapping).reduce((acc, curr) => acc + curr.length, 0);
@@ -41,7 +50,7 @@ const Dashboard = () => {
     <div className="page-container">
       <div className="page-header">
         <div className="page-title-section">
-          <h1 className="page-title">Welcome, Rahul Sharma</h1>
+          <h1 className="page-title">Welcome, {user?.name || 'Auditor'}</h1>
           <p className="page-subtitle">Here's what's happening with your audits today.</p>
         </div>
       </div>

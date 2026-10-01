@@ -88,7 +88,7 @@ export default function Auditors() {
       accessor: 'assignments',
       sortable: false,
       cell: (row) => {
-        const auditCount = audits.filter(a => a.auditor === row.name).length;
+        const auditCount = audits.filter(a => (a.auditors || []).includes(row.name)).length;
         const badgeLabel = auditCount === 1 ? '1 Audit' : `${auditCount} Audits`;
         return (
           <button

@@ -6,67 +6,8 @@ import Modal from '../components/Modal';
 import AuditDetailsPage from '../components/AuditDetailsPage';
 import { ClipboardList, Edit, Trash2, UserPlus, Eye, Users, X, ChevronDown, Search } from 'lucide-react';
 
-const FRAMEWORKS = [
-  'ISO 27001',
-  'SOC 2 Type II',
-  'SEBI CSCRF',
-  'ISO 22301',
-  'PCI DSS',
-  'HIPAA',
-  'RBI Cyber Security',
-  'Internal Audit',
-  'Custom Audit'
-];
-
-const AUDIT_CATEGORIES = [
-  'Governance & Risk Management',
-  'Asset Management',
-  'Access Control & Identity',
-  'Data Security & Cryptography',
-  'Continuous Monitoring',
-  'Incident Management',
-  'Data Protection & Backup'
-];
-
-const AUDIT_SUBCATEGORIES_MAP = {
-  'Governance & Risk Management': [
-    'Cybersecurity Policy & Strategy',
-    'Vendor Risk Assessment',
-    'Board Oversight & Compliance',
-    'Risk Management Framework'
-  ],
-  'Asset Management': [
-    'Hardware & Software Catalog',
-    'Real-time Asset Classification',
-    'Media Handling & Destruction'
-  ],
-  'Access Control & Identity': [
-    'Multi-Factor Authentication',
-    'Privileged Identity Management',
-    'User Access Provisioning',
-    'Least Privilege Enforcements'
-  ],
-  'Data Security & Cryptography': [
-    'AES-256 & TLS 1.3 Protocol Enforcements',
-    'Key Management & Rotation',
-    'Data Masking & Privacy'
-  ],
-  'Continuous Monitoring': [
-    'Security Operations & Event Aggregation',
-    'SIEM Telemetry & Logging',
-    'Vulnerability Scanning'
-  ],
-  'Incident Management': [
-    'Response Plan & Breach Notification',
-    'Forensic Isolation & Containment',
-    'Incident Escalation'
-  ],
-  'Data Protection & Backup': [
-    'Immutable Vaults & Recovery Testing',
-    'Disaster Recovery Plan',
-    'Backup Retention & Archiving'
-  ]
-};
+// Dropdown values (FRAMEWORKS, CATEGORIES, SUBCATEGORIES) are now dynamic —
+// computed from the `rulebook` (master Controls data) inside the component.
 
 const TARGET_FYS = [
   'FY 2024-25',
@@ -82,10 +23,30 @@ export default function AuditManagement() {
     companies, 
     clients, 
     auditors, 
+    rulebook,
     addAudit, 
     updateAudit, 
     deleteAudit 
   } = useApp();
+
+  // ─── Dynamic Dropdowns (from master Controls / rulebook) ───
+  const FRAMEWORKS = [...new Set(rulebook.map(r => r.frameworkType).filter(Boolean))];
+  const AUDIT_CATEGORIES = [...new Set(rulebook.map(r => r.frameworkCategory).filter(Boolean))];
+
+  // Build subcategory map: { category: [subcategory1, subcategory2, ...] }
+  const AUDIT_SUBCATEGORIES_MAP = {};
+  rulebook.forEach(r => {
+    if (r.frameworkCategory && r.frameworkSubcategory) {
+      if (!AUDIT_SUBCATEGORIES_MAP[r.frameworkCategory]) {
+        AUDIT_SUBCATEGORIES_MAP[r.frameworkCategory] = new Set();
+      }
+      AUDIT_SUBCATEGORIES_MAP[r.frameworkCategory].add(r.frameworkSubcategory);
+    }
+  });
+  // Convert Sets to Arrays
+  Object.keys(AUDIT_SUBCATEGORIES_MAP).forEach(key => {
+    AUDIT_SUBCATEGORIES_MAP[key] = [...AUDIT_SUBCATEGORIES_MAP[key]];
+  });
 
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -95,6 +56,9 @@ export default function AuditManagement() {
 
   const [selectedAudit, setSelectedAudit] = useState(null);
   const [activeAuditDetails, setActiveAuditDetails] = useState(null);
+
+  const [isEditAuditorsDropdownOpen, setIsEditAuditorsDropdownOpen] = useState(false);
+  const [isCreatingAudit, setIsCreatingAudit] = useState(false);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -129,19 +93,32 @@ export default function AuditManagement() {
     }));
   };
 
+  const handleToggleEditAuditor = (auditorName) => {
+    setEditForm(prev => {
+      const updated = prev.auditors.includes(auditorName)
+        ? prev.auditors.filter(a => a !== auditorName)
+        : [...prev.auditors, auditorName];
+      return { ...prev, auditors: updated };
+    });
+  };
+
+  const handleRemoveEditAuditor = (auditorName, e) => {
+    e.stopPropagation();
+    setEditForm(prev => ({
+      ...prev,
+      auditors: prev.auditors.filter(a => a !== auditorName)
+    }));
+  };
+
   const [editForm, setEditForm] = useState({
     id: '',
     auditName: '',
     company: '',
-    client: '',
-    auditor: '',
-    rulebook: '',
-    phase: 'Scope & Setup',
-    priority: 'Medium',
-    startDate: '',
-    dueDate: '',
-    description: '',
-    progress: 0,
+    auditors: [],
+    framework: '',
+    category: '',
+    subcategory: '',
+    targetFY: '',
     status: 'In Progress'
   });
 
@@ -158,17 +135,13 @@ export default function AuditManagement() {
     setSelectedAudit(audit);
     setEditForm({
       id: audit.id,
-      auditName: audit.auditName || `${audit.rulebook} Assessment`,
+      auditName: audit.auditName || `${audit.framework} Assessment`,
       company: audit.company,
-      client: audit.client,
-      auditor: audit.auditor,
-      rulebook: audit.rulebook,
-      phase: audit.phase || (audit.status === 'Completed' ? 'Certification' : audit.status === 'Pending Review' ? 'Auditor Review' : 'Evidence Gathering'),
-      priority: audit.priority || 'Medium',
-      startDate: audit.startDate || '2026-07-01',
-      dueDate: audit.dueDate,
-      description: audit.description || 'Standard compliance assessment.',
-      progress: audit.progress || 0,
+      auditors: audit.auditors || [],
+      framework: audit.framework,
+      category: audit.category,
+      subcategory: audit.subcategory,
+      targetFY: audit.targetFY,
       status: audit.status || 'In Progress'
     });
     setIsEditModalOpen(true);
@@ -205,63 +178,72 @@ export default function AuditManagement() {
   const columns = [
     { header: 'ID', accessor: 'id', sortable: true },
     { header: 'Company', accessor: 'company', sortable: true },
-    { header: 'Client', accessor: 'client', sortable: true },
-    { header: 'Assigned Auditor', accessor: 'auditor', sortable: true },
-    { header: 'Framework', accessor: 'rulebook', sortable: true },
+    { header: 'Framework Type', accessor: 'framework', sortable: true },
+    { header: 'Framework Category', accessor: 'category', sortable: true },
+    { header: 'Audit Name', accessor: 'auditName', sortable: true },
     { 
-      header: 'Progress', 
-      accessor: 'progress', 
-      sortable: true,
-      cell: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div style={{ flexGrow: 1, height: '8px', backgroundColor: '#E2E8F0', borderRadius: '4px', width: '80px', overflow: 'hidden' }}>
-            <div style={{ 
-              width: `${row.progress}%`, 
-              height: '100%', 
-              backgroundColor: row.progress === 100 ? '#10B981' : 'var(--primary)' 
-            }}></div>
+      header: 'Assigned Auditors', 
+      accessor: 'auditors', 
+      sortable: false,
+      cell: (row) => {
+        const auditorsList = row.auditors || [];
+        if (auditorsList.length === 0) {
+          return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>Unassigned</span>;
+        }
+        return (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+            {auditorsList.map((name, idx) => (
+              <span key={idx} style={{
+                backgroundColor: 'var(--bg-secondary)',
+                border: '1px solid var(--border-color)',
+                color: 'var(--text-primary)',
+                padding: '2px 8px',
+                borderRadius: '9999px',
+                fontSize: '11px',
+                fontWeight: '500',
+                whiteSpace: 'nowrap'
+              }}>
+                {name}
+              </span>
+            ))}
           </div>
-          <span style={{ fontWeight: '600', fontSize: '12px' }}>{row.progress}%</span>
-        </div>
-      )
+        );
+      }
     },
+    { header: 'Target FY', accessor: 'targetFY', sortable: true },
     { header: 'Status', accessor: 'status', sortable: true, isStatus: true },
   ];
 
   const filterOptions = [
-    { label: 'Status', key: 'status', options: ['In Progress', 'Pending Review', 'Completed'] },
-    { label: 'Framework', key: 'rulebook', options: FRAMEWORKS },
-    { label: 'Auditor', key: 'auditor', options: auditors.map(a => a.name) }
+    { label: 'Status', key: 'status', options: ['Pending', 'In Progress', 'Completed'] },
+    { label: 'Framework Type', key: 'framework', options: FRAMEWORKS },
+    { label: 'Framework Category', key: 'category', options: AUDIT_CATEGORIES }
   ];
 
   const tableActions = [
     { label: 'View Audit', onClick: (row) => navigate(`/audits/${row.id}`) },
     { label: 'Edit Audit', onClick: (row) => handleOpenEdit(row) },
     { label: 'Manage Controls', onClick: (row) => navigate(`/audits/${row.id}`) },
-    { label: 'Reassign Client', onClick: (row) => handleOpenReassignClient(row) },
     { label: 'Reassign Auditor', onClick: (row) => handleOpenReassignAuditor(row) },
     { label: 'View Specifications', onClick: (row) => handleOpenViewDetails(row) },
     { label: 'Delete', onClick: (row) => handleDeleteAudit(row) },
   ];
 
-  const handleCreateSubmit = (e) => {
+  const handleCreateSubmit = async (e) => {
     e.preventDefault();
+    setIsCreatingAudit(true);
     const newAudit = {
-      company: createForm.company || 'Selected Company',
-      client: 'Representative',
-      auditor: createForm.auditors.length > 0 ? createForm.auditors.join(', ') : 'Unassigned Auditor',
-      rulebook: createForm.framework || FRAMEWORKS[0],
+      company: createForm.company,
+      framework: createForm.framework,
       auditName: createForm.auditName || 'New Compliance Audit',
       category: createForm.category,
       subcategory: createForm.subcategory,
+      auditors: createForm.auditors,
       targetFY: createForm.targetFY,
-      phase: 'Scope & Setup',
-      priority: 'Medium',
-      startDate: new Date().toISOString().split('T')[0],
-      dueDate: '2026-12-31',
-      description: 'Standard compliance assessment.'
+      status: 'Pending'
     };
-    addAudit(newAudit);
+    await addAudit(newAudit);
+    
     setCreateForm({
       auditName: '',
       company: '',
@@ -274,12 +256,15 @@ export default function AuditManagement() {
     setCompanySearchQuery('');
     setIsCompanyDropdownOpen(false);
     setIsAuditorsDropdownOpen(false);
+    setIsCreatingAudit(false);
     setIsCreateModalOpen(false);
   };
 
-  const handleEditSubmit = (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
-    updateAudit(editForm);
+    setIsCreatingAudit(true);
+    await updateAudit(editForm);
+    setIsCreatingAudit(false);
     setIsEditModalOpen(false);
   };
 
@@ -305,17 +290,13 @@ export default function AuditManagement() {
   const filteredClients = clients.filter(c => c.company === createForm.company);
   const editFilteredClients = clients.filter(c => c.company === editForm.company);
 
-  const availableCompanies = companies.length > 0
-    ? companies.map(c => c.name)
-    : ['Aether Technologies', 'Apex Financial Services', 'BioHealth Solutions', 'Nova Logistics Corp', 'Quantum Retail'];
+  const availableCompanies = companies.map(c => c.name);
 
   const filteredCompaniesList = availableCompanies.filter(c =>
     c.toLowerCase().includes(companySearchQuery.toLowerCase())
   );
 
-  const availableAuditorsList = auditors.length > 0
-    ? auditors.map(a => a.name)
-    : ['Dr. Evelyn Foster', 'Christian Wolff', 'Lisbeth Salander'];
+  const availableAuditorsList = auditors.map(a => a.name);
 
   return (
     <div className="page-container">
@@ -332,8 +313,8 @@ export default function AuditManagement() {
       <ExcelTable
         columns={columns}
         data={audits}
-        searchPlaceholder="Search by ID, company, client, auditor, framework..."
-        searchKeys={['id', 'company', 'client', 'auditor', 'rulebook']}
+        searchPlaceholder="Search by ID, company, framework, category, audit name..."
+        searchKeys={['id', 'company', 'framework', 'category', 'auditName']}
         filterOptions={filterOptions}
         actions={tableActions}
         onRowClick={(row) => navigate(`/audits/${row.id}`)}
@@ -537,8 +518,8 @@ export default function AuditManagement() {
             >
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              Create Audit
+            <button type="submit" className="btn btn-primary" disabled={isCreatingAudit}>
+              {isCreatingAudit ? 'Creating...' : 'Create Audit'}
             </button>
           </div>
         </form>
@@ -569,140 +550,142 @@ export default function AuditManagement() {
             </div>
           </div>
 
+          {/* 1. Audit Name & FY */}
+          <div className="form-row">
+            <div className="form-group">
+              <label className="form-label">Audit Name</label>
+              <input
+                type="text"
+                className="form-input"
+                value={editForm.auditName}
+                onChange={(e) => setEditForm({ ...editForm, auditName: e.target.value })}
+                required
+              />
+            </div>
+            <div className="form-group">
+              <label className="form-label">Target FY</label>
+              <select
+                className="form-input"
+                value={editForm.targetFY}
+                onChange={(e) => setEditForm({ ...editForm, targetFY: e.target.value })}
+                required
+              >
+                <option value="">Select Target FY</option>
+                {TARGET_FYS.map(fy => (
+                  <option key={fy} value={fy}>{fy}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* 2. Company & Auditors */}
           <div className="form-row">
             <div className="form-group">
               <label className="form-label">Client Company</label>
               <select
                 className="form-input"
                 value={editForm.company}
-                onChange={(e) => setEditForm({ ...editForm, company: e.target.value, client: '' })}
+                onChange={(e) => setEditForm({ ...editForm, company: e.target.value })}
                 required
               >
+                <option value="">Select Company</option>
                 {companies.map(comp => (
                   <option key={comp.id} value={comp.name}>{comp.name}</option>
                 ))}
               </select>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Client Representative</label>
-              <select
-                className="form-input"
-                value={editForm.client}
-                onChange={(e) => setEditForm({ ...editForm, client: e.target.value })}
-                required
-                disabled={!editForm.company}
+            <div className="form-group" style={{ position: 'relative' }}>
+              <label className="form-label">Assigned Auditors</label>
+              <div 
+                className="form-input multi-select-display"
+                onClick={() => setIsEditAuditorsDropdownOpen(!isEditAuditorsDropdownOpen)}
+                style={{ cursor: 'pointer', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}
               >
-                <option value="">Select representative</option>
-                {editForm.company ? (
-                  editFilteredClients.map(c => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))
-                ) : (
-                  <option disabled>Please select a company first</option>
-                )}
-              </select>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', flex: 1 }}>
+                  {editForm.auditors.length > 0 ? (
+                    editForm.auditors.map(auditor => (
+                      <span key={auditor} className="chip-tag" style={{ backgroundColor: 'var(--primary)', color: 'white', border: 'none' }}>
+                        {auditor}
+                        <button type="button" onClick={(e) => handleRemoveEditAuditor(auditor, e)} style={{ border: 'none', background: 'transparent', color: 'white', marginLeft: '4px', cursor: 'pointer' }}>×</button>
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ fontSize: '15px', color: '#94A3B8' }}>Select Auditors</span>
+                  )}
+                </div>
+                <ChevronDown size={18} style={{ color: 'var(--text-secondary)' }} />
+              </div>
+
+              {isEditAuditorsDropdownOpen && (
+                <div className="multi-select-dropdown-menu">
+                  {availableAuditorsList.map(aud => {
+                    const isSelected = editForm.auditors.includes(aud);
+                    return (
+                      <div
+                        key={aud}
+                        className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                        onClick={() => handleToggleEditAuditor(aud)}
+                      >
+                        <span>{aud}</span>
+                        {isSelected && <span style={{ fontSize: '12px', fontWeight: '700' }}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
 
+          {/* 3. Framework & Category */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Lead Auditor</label>
+              <label className="form-label">Audit Framework</label>
               <select
                 className="form-input"
-                value={editForm.auditor}
-                onChange={(e) => setEditForm({ ...editForm, auditor: e.target.value })}
+                value={editForm.framework}
+                onChange={(e) => setEditForm({ ...editForm, framework: e.target.value })}
                 required
               >
-                {auditors.map(aud => (
-                  <option key={aud.id} value={aud.name}>{aud.name}</option>
-                ))}
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Framework</label>
-              <select
-                className="form-input"
-                value={editForm.rulebook}
-                onChange={(e) => setEditForm({ ...editForm, rulebook: e.target.value })}
-                required
-              >
+                <option value="">Select Framework</option>
                 {FRAMEWORKS.map(f => (
                   <option key={f} value={f}>{f}</option>
                 ))}
               </select>
             </div>
-          </div>
-
-          <div className="form-row">
+            
             <div className="form-group">
-              <label className="form-label">Phase</label>
+              <label className="form-label">Audit Category</label>
               <select
                 className="form-input"
-                value={editForm.phase}
-                onChange={(e) => setEditForm({ ...editForm, phase: e.target.value })}
+                value={editForm.category}
+                onChange={(e) => setEditForm({ ...editForm, category: e.target.value, subcategory: '' })}
                 required
               >
-                <option value="Scope & Setup">Scope & Setup</option>
-                <option value="Evidence Gathering">Evidence Gathering</option>
-                <option value="Auditor Review">Auditor Review</option>
-                <option value="Draft Report">Draft Report</option>
-                <option value="Certification">Certification</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Priority</label>
-              <select
-                className="form-input"
-                value={editForm.priority}
-                onChange={(e) => setEditForm({ ...editForm, priority: e.target.value })}
-                required
-              >
-                <option value="High">High</option>
-                <option value="Medium">Medium</option>
-                <option value="Low">Low</option>
+                <option value="">Select Category</option>
+                {AUDIT_CATEGORIES.map(cat => (
+                  <option key={cat} value={cat}>{cat}</option>
+                ))}
               </select>
             </div>
           </div>
 
+          {/* 4. Subcategory & Status */}
           <div className="form-row">
             <div className="form-group">
-              <label className="form-label">Start Date</label>
-              <input
-                type="date"
+              <label className="form-label">Audit Subcategory</label>
+              <select
                 className="form-input"
-                value={editForm.startDate}
-                onChange={(e) => setEditForm({ ...editForm, startDate: e.target.value })}
+                value={editForm.subcategory}
+                onChange={(e) => setEditForm({ ...editForm, subcategory: e.target.value })}
                 required
-              />
-            </div>
-
-            <div className="form-group">
-              <label className="form-label">Target Due Date</label>
-              <input
-                type="date"
-                className="form-input"
-                value={editForm.dueDate}
-                onChange={(e) => setEditForm({ ...editForm, dueDate: e.target.value })}
-                required
-              />
-            </div>
-          </div>
-
-          <div className="form-row">
-            <div className="form-group">
-              <label className="form-label">Progress (%)</label>
-              <input
-                type="number"
-                min="0"
-                max="100"
-                className="form-input"
-                value={editForm.progress}
-                onChange={(e) => setEditForm({ ...editForm, progress: parseInt(e.target.value) || 0 })}
-                required
-              />
+                disabled={!editForm.category}
+              >
+                <option value="">Select Subcategory</option>
+                {editForm.category && AUDIT_SUBCATEGORIES_MAP[editForm.category]?.map(sub => (
+                  <option key={sub} value={sub}>{sub}</option>
+                ))}
+              </select>
             </div>
 
             <div className="form-group">
@@ -713,6 +696,7 @@ export default function AuditManagement() {
                 onChange={(e) => setEditForm({ ...editForm, status: e.target.value })}
                 required
               >
+                <option value="Pending">Pending</option>
                 <option value="In Progress">In Progress</option>
                 <option value="Pending Review">Pending Review</option>
                 <option value="Completed">Completed</option>
@@ -720,22 +704,12 @@ export default function AuditManagement() {
             </div>
           </div>
 
-          <div className="form-group">
-            <label className="form-label">Scope Description</label>
-            <textarea
-              className="form-input"
-              rows="3"
-              value={editForm.description}
-              onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
-            ></textarea>
-          </div>
-
           <div className="modal-footer" style={{ margin: '24px -24px -24px -24px' }}>
             <button type="button" className="btn btn-secondary" onClick={() => setIsEditModalOpen(false)}>
               Cancel
             </button>
-            <button type="submit" className="btn btn-primary">
-              <Edit size={16} /> Save Changes
+            <button type="submit" className="btn btn-primary" disabled={isCreatingAudit}>
+              <Edit size={16} /> {isCreatingAudit ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

@@ -5,7 +5,7 @@ import Modal from '../components/Modal';
 import { Building2 } from 'lucide-react';
 
 export default function Companies() {
-  const { companies, addCompany, updateCompany } = useApp();
+  const { companies, addCompany, updateCompany, audits } = useApp();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
@@ -24,6 +24,14 @@ export default function Companies() {
     registrationNumber: '',
     status: ''
   });
+
+  // Calculate dynamic counts based on audits state
+  const companiesWithCounts = React.useMemo(() => {
+    return companies.map(company => ({
+      ...company,
+      auditsCount: audits.filter(a => a.company === company.name).length
+    }));
+  }, [companies, audits]);
 
   const columns = [
     { header: 'ID', accessor: 'id', sortable: true },
@@ -110,7 +118,7 @@ export default function Companies() {
 
       <ExcelTable
         columns={columns}
-        data={companies}
+        data={companiesWithCounts}
         searchPlaceholder="Search by name, industry, score..."
         searchKeys={['name', 'industry', 'id', 'registrationNumber']}
         filterOptions={filterOptions}
