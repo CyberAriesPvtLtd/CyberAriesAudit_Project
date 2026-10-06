@@ -25,7 +25,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=AuditControlResponse, dependencies=[Depends(require_admin)])
+@router.post("/", response_model=AuditControlResponse, dependencies=[Depends(require_admin)], status_code=201)
 def add_audit_control(
     audit_control: AuditControlCreate,
     db: Session = Depends(get_db)
@@ -72,7 +72,7 @@ def edit_audit_control(
     )
 
 
-@router.delete("/{audit_control_id}")
+@router.delete("/{audit_control_id}", status_code=204, dependencies=[Depends(require_admin)])
 def remove_audit_control(
     audit_control_id: str,
     db: Session = Depends(get_db)

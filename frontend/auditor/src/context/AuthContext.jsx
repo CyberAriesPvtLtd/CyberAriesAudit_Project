@@ -77,10 +77,12 @@ export const AuthProvider = ({ children }) => {
           if (assignedControlIds.length > 0) {
             try {
               const batchEvidence = await api.getEvidenceBatch(assignedControlIds);
+              const controlsWithEvidence = new Set();
               for (const link of batchEvidence) {
                 const ev = link.evidence_item;
                 const ac = assignedControls.find(c => c.id === link.audit_control_id);
                 if (ev && ac) {
+                  controlsWithEvidence.add(ac.id);
                   mappedEvidence.push({
                     id: ev.id,
                     fileName: ev.file_name,
@@ -90,8 +92,27 @@ export const AuthProvider = ({ children }) => {
                     date: new Date(ev.created_at).toLocaleDateString(),
                     status: ev.status,
                     auditor_notes: ev.auditor_notes || '',
+                    client_feedback: ev.client_feedback || '',
                     reviewed_by: ev.reviewed_by || null,
                     reviewed_at: ev.reviewed_at ? new Date(ev.reviewed_at).toLocaleDateString() : null,
+                  });
+                }
+              }
+
+              for (const ac of assignedControls) {
+                if (!controlsWithEvidence.has(ac.id)) {
+                  mappedEvidence.push({
+                    id: `empty-${ac.id}`,
+                    fileName: '-',
+                    client: companyName,
+                    controlId: (ac.control?.framework_rules && ac.control.framework_rules.length > 0) ? ac.control.framework_rules.join(', ') : (ac.control?.control_id || ac.control_id),
+                    controlDesc: ac.control?.control_desc || 'No description available',
+                    date: '-',
+                    status: 'Awaiting Upload',
+                    auditor_notes: '',
+                    client_feedback: '',
+                    reviewed_by: null,
+                    reviewed_at: null,
                   });
                 }
               }
@@ -174,9 +195,12 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateEvidenceStatus = async (evidenceId, newStatus) => {
+  const updateEvidenceStatus = async (evidenceId, newStatus, clientFeedback = null) => {
     try {
       await api.updateEvidenceStatus(evidenceId, newStatus, user?.id);
+      if (clientFeedback !== null) {
+        await api.updateClientFeedback(evidenceId, clientFeedback);
+      }
     } catch (err) {
       console.error("Failed to update evidence status:", err);
       return;
@@ -189,7 +213,44 @@ export const AuthProvider = ({ children }) => {
 
       const updatedList = list.map(ev => {
         if (ev.id === evidenceId) {
-          return { ...ev, status: newStatus };
+          return {
+            ...ev,
+            status: newStatus,
+            ...(clientFeedback !== null ? { client_feedback: clientFeedback } : {})
+          };
+        }
+        return ev;
+      });
+
+      return {
+        ...prev,
+        [selectedClient]: {
+          ...clientData,
+          [selectedAudit]: {
+            ...auditData,
+            evidence: updatedList
+          }
+        }
+      };
+    });
+  };
+
+  const updateEvidenceNotes = async (evidenceId, notes) => {
+    try {
+      await api.updateClientFeedback(evidenceId, notes);
+    } catch (err) {
+      console.error("Failed to update client feedback:", err);
+      return;
+    }
+
+    setAuditsData(prev => {
+      const clientData = prev[selectedClient] || {};
+      const auditData = clientData[selectedAudit] || {};
+      const list = auditData.evidence || [];
+
+      const updatedList = list.map(ev => {
+        if (ev.id === evidenceId) {
+          return { ...ev, client_feedback: notes };
         }
         return ev;
       });
@@ -264,6 +325,7 @@ export const AuthProvider = ({ children }) => {
     switchClient,
     switchAudit,
     updateEvidenceStatus,
+    updateEvidenceNotes,
     login,
     logout
   };

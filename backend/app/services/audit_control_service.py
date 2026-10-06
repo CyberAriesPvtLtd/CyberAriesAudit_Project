@@ -126,6 +126,4 @@ def delete_audit_control(
     db.delete(audit_control)
     db.commit()
 
-    return {
-        "message": "Audit Control deleted successfully"
-    }
+    return None

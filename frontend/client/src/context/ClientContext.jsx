@@ -101,11 +101,12 @@ export const ClientProvider = ({ children }) => {
         return;
       }
 
-      const auditNames = frameworks.map(f => f.audit_name || `${f.audit_type} Assessment`);
+      const sortedFrameworks = frameworks.sort((a, b) => b.id - a.id);
+      const auditNames = sortedFrameworks.map(f => f.audit_name || `${f.audit_type} Assessment`);
       setAssignedAudits(auditNames);
-      setClientAudits(frameworks);
+      setClientAudits(sortedFrameworks);
 
-      // If no currentAudit selected yet, pick the first one
+      // If no currentAudit selected yet, pick the first one (which is now the newest)
       if (!currentAudit || !auditNames.includes(currentAudit)) {
         setCurrentAudit(auditNames[0]);
       }
@@ -142,7 +143,9 @@ export const ClientProvider = ({ children }) => {
                       date: item.created_at ? new Date(item.created_at).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
                       type: item.file_name.split('.').pop().toUpperCase(),
                       uploadedBy: item.uploaded_by || 'Client',
-                      status: 'Uploaded',
+                      status: item.status || 'Pending Review',
+                      auditorNotes: item.auditor_notes || '',
+                      clientFeedback: item.client_feedback || '',
                       evidenceItemId: item.id,
                       linkId: link.id, // the AuditControlEvidence link id
                     };
@@ -323,7 +326,7 @@ export const ClientProvider = ({ children }) => {
                   date: new Date().toISOString().split('T')[0],
                   type: fileName.split('.').pop().toUpperCase(),
                   uploadedBy: currentUser?.fullName || 'Client',
-                  status: 'Uploaded',
+                  status: 'Pending Review',
                   evidenceItemId: result.evidence.id
                 }
               ]

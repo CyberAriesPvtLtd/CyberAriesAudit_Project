@@ -7,13 +7,14 @@ from app.models.company import Company
 def create_company(db: Session, company_data):
 
     existing_company = db.query(Company).filter(
-        Company.company_name == company_data.company_name
+        (Company.company_name == company_data.company_name) |
+        (Company.registration_no == company_data.registration_no)
     ).first()
 
     if existing_company:
         raise HTTPException(
-            status_code=400,
-            detail="Company already exists"
+            status_code=409,
+            detail="Company with this name or registration number already exists"
         )
 
     company = Company(
@@ -82,4 +83,4 @@ def delete_company(db: Session, company_id: str):
     db.delete(company)
     db.commit()
 
-    return {"message": "Company deleted successfully"}
+    return None

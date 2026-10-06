@@ -27,7 +27,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=ControlsResponse)
+@router.post("/", response_model=ControlsResponse, status_code=201)
 def add_control(
     control: ControlsCreate,
     db: Session = Depends(get_db)
@@ -58,7 +58,7 @@ def edit_control(
     )
 
 
-@router.delete("/{id}")
+@router.delete("/{id}", status_code=204)
 def remove_control(
     id: str,
     db: Session = Depends(get_db)

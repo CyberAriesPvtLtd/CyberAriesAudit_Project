@@ -100,6 +100,18 @@ export const updateEvidenceNotes = async (evidenceItemId, auditor_notes) => {
 };
 
 /*
+ * Client Feedback — updates evidence_files.client_feedback via the
+ * PUT /evidence-files/{evidence_item_id}/client-feedback endpoint.
+ */
+export const updateClientFeedback = async (evidenceItemId, client_feedback) => {
+  const { data } = await axiosClient.put(
+    `/evidence-files/${evidenceItemId}/client-feedback`,
+    { client_feedback }
+  );
+  return data;
+};
+
+/*
  * Evidence Status — updates evidence_files.status via the existing
  * PUT /evidence-files/{evidence_item_id} endpoint.
  */
@@ -124,6 +136,7 @@ const api = {
   getEvidenceBatch,
   getEvidenceDownloadUrl,
   updateEvidenceNotes,
+  updateClientFeedback,
   updateEvidenceStatus,
 };
 

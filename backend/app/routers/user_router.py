@@ -24,7 +24,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=UserResponse)
+@router.post("/", response_model=UserResponse, status_code=201)
 def add_user(
     user: UserCreate,
     db: Session = Depends(get_db)
@@ -65,7 +65,7 @@ def reassign_company(
     return admin_reassign_user_company(db, user_id, company_data)
 
 
-@router.delete("/{user_id}")
+@router.delete("/{user_id}", status_code=204)
 def remove_user(
     user_id: str,
     db: Session = Depends(get_db)

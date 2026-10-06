@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import Modal from './Modal';
@@ -17,7 +17,9 @@ import {
   Calendar,
   Building,
   Shield,
-  Activity
+  Activity,
+  ChevronDown,
+  X
 } from 'lucide-react';
 
 export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp, onOpenEdit }) {
@@ -118,7 +120,8 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
 
   // Control Filters state
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedDomain, setSelectedDomain] = useState('');
+  const [selectedDomains, setSelectedDomains] = useState([]);
+  const [isDomainDropdownOpen, setIsDomainDropdownOpen] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedStatus, setSelectedStatus] = useState('All'); // 'All' | 'Assigned' | 'Unassigned'
   const [selectedAuditorFilter, setSelectedAuditorFilter] = useState('');
@@ -133,6 +136,20 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
   const [controlToReassign, setControlToReassign] = useState(null);
   const [newAuditorName, setNewAuditorName] = useState('');
 
+  // Dropdown closing logic
+  const domainDropdownRef = useRef(null);
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (domainDropdownRef.current && !domainDropdownRef.current.contains(event.target)) {
+        setIsDomainDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
   // Filtering Logic
   const filteredControls = useMemo(() => {
     return controls.filter(ctrl => {
@@ -143,7 +160,7 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
         (ctrl.description && ctrl.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       // Domain
-      const matchesDomain = !selectedDomain || ctrl.domain === selectedDomain;
+      const matchesDomain = selectedDomains.length === 0 || selectedDomains.includes(ctrl.domain);
 
       // Category
       const matchesCategory = !selectedCategory || ctrl.category === selectedCategory;
@@ -168,14 +185,17 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
 
       return matchesSearch && matchesDomain && matchesCategory && matchesStatus && matchesAuditor;
     });
-  }, [controls, searchQuery, selectedDomain, selectedCategory, selectedStatus, selectedAuditorFilter, isQuickUnassigned]);
+  }, [controls, searchQuery, selectedDomains, selectedCategory, selectedStatus, selectedAuditorFilter, isQuickUnassigned]);
 
   // Checkbox handlers
   const handleSelectAll = (e) => {
     if (e.target.checked) {
-      setSelectedControlIds(filteredControls.map(c => c.id));
+      const newSelections = new Set(selectedControlIds);
+      filteredControls.forEach(c => newSelections.add(c.id));
+      setSelectedControlIds(Array.from(newSelections));
     } else {
-      setSelectedControlIds([]);
+      const filteredIds = new Set(filteredControls.map(c => c.id));
+      setSelectedControlIds(prev => prev.filter(id => !filteredIds.has(id)));
     }
   };
 
@@ -500,21 +520,60 @@ export default function AuditDetailsPage({ audit: auditProp, onBack: onBackProp,
           {/* Filter Dropdowns Row */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '10px' }}>
             {/* Domain */}
-            <div>
+            <div className="custom-multi-select-container" style={{ position: 'relative' }} ref={domainDropdownRef}>
               <label style={{ fontSize: '11px', fontWeight: '700', color: 'var(--text-secondary)', textTransform: 'uppercase', marginBottom: '4px', display: 'block' }}>
                 Filter by Domain
               </label>
-              <select
-                className="form-input"
-                value={selectedDomain}
-                onChange={(e) => setSelectedDomain(e.target.value)}
-                style={{ padding: '6px 10px', fontSize: '12.5px' }}
+              <div
+                className={`multi-select-box form-input ${isDomainDropdownOpen ? 'focused' : ''}`}
+                onClick={() => setIsDomainDropdownOpen(!isDomainDropdownOpen)}
+                style={{ justifyContent: 'space-between', cursor: 'pointer', padding: '6px 10px', minHeight: '34px', fontSize: '12.5px', background: '#fff' }}
               >
-                <option value="">All Domains</option>
-                {dynamicDomains.map(d => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center', flex: 1 }}>
+                  {selectedDomains.length > 0 ? (
+                    selectedDomains.map(dom => (
+                      <span key={dom} className="chip-tag" style={{ margin: 0, padding: '2px 6px', fontSize: '11px' }}>
+                        {dom}
+                        <button
+                          type="button"
+                          className="chip-remove-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedDomains(prev => prev.filter(d => d !== dom));
+                          }}
+                        >
+                          <X size={10} />
+                        </button>
+                      </span>
+                    ))
+                  ) : (
+                    <span style={{ color: '#94A3B8' }}>All Domains</span>
+                  )}
+                </div>
+                <ChevronDown size={14} style={{ color: 'var(--text-secondary)' }} />
+              </div>
+
+              {isDomainDropdownOpen && (
+                <div className="multi-select-dropdown-menu" style={{ top: '100%', marginTop: '4px', zIndex: 100 }}>
+                  {dynamicDomains.map(d => {
+                    const isSelected = selectedDomains.includes(d);
+                    return (
+                      <div
+                        key={d}
+                        className={`multi-select-option ${isSelected ? 'selected' : ''}`}
+                        onClick={() => {
+                          setSelectedDomains(prev => 
+                            isSelected ? prev.filter(item => item !== d) : [...prev, d]
+                          );
+                        }}
+                      >
+                        <span style={{ fontSize: '12.5px' }}>{d}</span>
+                        {isSelected && <span style={{ fontSize: '12px', fontWeight: '700' }}>✓</span>}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             {/* Category */}

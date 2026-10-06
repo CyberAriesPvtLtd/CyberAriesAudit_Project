@@ -20,6 +20,10 @@ const NotesCell = ({ row }) => {
     setSaving(false);
   };
 
+  if (row.status === 'Awaiting Upload') {
+    return <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>-</span>;
+  }
+
   return (
     <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
       <textarea
@@ -40,42 +44,102 @@ const NotesCell = ({ row }) => {
   );
 };
 
+const FeedbackCell = ({ row, onUpdateFeedback }) => {
+  const [feedback, setFeedback] = useState(row.client_feedback || '');
+  const [saving, setSaving] = useState(false);
+
+  React.useEffect(() => {
+    setFeedback(row.client_feedback || '');
+  }, [row.client_feedback]);
+
+  if (row.status !== 'Rejected') {
+    return <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Only available when rejected</span>;
+  }
+
+  const handleSave = async (e) => {
+    e.stopPropagation();
+    setSaving(true);
+    try {
+      await onUpdateFeedback(row.id, feedback);
+    } catch (err) {
+      console.error("Failed to save feedback", err);
+    }
+    setSaving(false);
+  };
+
+  return (
+    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
+      <textarea
+        value={feedback}
+        onChange={(e) => setFeedback(e.target.value)}
+        style={{
+          width: '150px',
+          height: '32px',
+          fontSize: '11px',
+          padding: '4px',
+          borderRadius: '4px',
+          border: '1px solid #FCA5A5',
+          backgroundColor: '#FEF2F2',
+          resize: 'vertical'
+        }}
+        placeholder="Reason for rejection..."
+      />
+      <button
+        className="btn btn-primary"
+        style={{
+          padding: '4px 8px',
+          fontSize: '11px',
+          minWidth: 'unset',
+          display: 'flex',
+          alignItems: 'center',
+          justify: 'center',
+          backgroundColor: '#C5221F',
+          borderColor: '#C5221F'
+        }}
+        onClick={handleSave}
+        disabled={saving}
+        title="Save Client Feedback"
+      >
+        <Save size={14} />
+      </button>
+    </div>
+  );
+};
+
 const EvidenceReview = () => {
-  const { selectedClient, selectedAudit, activeAuditData, updateEvidenceStatus } = useAuth();
+  const { selectedClient, selectedAudit, activeAuditData, updateEvidenceStatus, updateEvidenceNotes } = useAuth();
 
   // Preview modal state — null when closed, { url, fileName } when open
   const [previewState, setPreviewState] = useState(null);
   // Description modal state — null when closed, string when open
   const [descModal, setDescModal] = useState(null);
+  // Rejection feedback modal state — null when closed, { item, feedback } when open
+  const [rejectionModal, setRejectionModal] = useState(null);
 
   const evidenceItems = activeAuditData.evidence || [];
 
   // KPI Calculations
-  const totalFiles = evidenceItems.length;
+  const awaitingCount = evidenceItems.filter(e => e.status === 'Awaiting Upload').length;
   const pendingCount = evidenceItems.filter(e => e.status === 'Pending Review' || e.status === 'Under AI Analysis').length;
   const approvedCount = evidenceItems.filter(e => e.status === 'Approved').length;
   const rejectedCount = evidenceItems.filter(e => e.status === 'Rejected').length;
 
   const columns = [
     {
-      header: 'File Name',
-      accessor: 'fileName',
-      cell: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 550 }}>
-          <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
-          <span>{row.fileName}</span>
-        </div>
-      )
-    },
-    { header: 'Client Name', accessor: 'client' },
-    {
       header: 'Framework Code',
       accessor: 'controlId',
-      cell: (row) => (
-        <code style={{ fontSize: '12px', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace' }}>
-          {row.controlId}
-        </code>
-      )
+      cell: (row) => {
+        const codes = row.controlId ? row.controlId.split(',').map(c => c.trim()).filter(Boolean) : [];
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
+            {codes.map((code, idx) => (
+              <code key={idx} style={{ fontSize: '11px', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
+                {code}
+              </code>
+            ))}
+          </div>
+        );
+      }
     },
     { 
       header: 'Description', 
@@ -91,19 +155,17 @@ const EvidenceReview = () => {
         </button>
       )
     },
-    { header: 'Upload Date', accessor: 'date' },
+    {
+      header: 'File Name',
+      accessor: 'fileName',
+      cell: (row) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 550 }}>
+          <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
+          <span>{row.fileName}</span>
+        </div>
+      )
+    },
     { header: 'Status', accessor: 'status', isStatus: true },
-    {
-      header: 'Reviewed At',
-      accessor: 'reviewed_at',
-      cell: (row) => row.reviewed_at ? <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{row.reviewed_at}</span> : '-'
-    },
-    {
-      header: 'Auditor Notes',
-      accessor: 'auditor_notes',
-      sortable: false,
-      cell: (row) => <NotesCell row={row} />
-    },
     {
       header: 'Review Actions',
       accessor: 'action',
@@ -114,15 +176,16 @@ const EvidenceReview = () => {
           try {
             const data = await api.getEvidenceDownloadUrl(row.id);
             if (data.download_url) {
-              // Open in-page preview modal instead of navigating away.
-              // window.open() after async/await loses the user gesture trust,
-              // is blocked as a popup, and falls back to navigating the current tab.
               setPreviewState({ url: data.download_url, fileName: data.file_name || row.fileName });
             }
           } catch (err) {
             console.error("Failed to get preview URL", err);
           }
         };
+
+        if (row.status === 'Awaiting Upload') {
+          return <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Waiting for client...</span>;
+        }
 
         return (
           <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
@@ -145,7 +208,7 @@ const EvidenceReview = () => {
             <button
               className="btn btn-outline"
               style={{ padding: '4px 8px', fontSize: '11px', borderColor: '#C5221F', color: '#C5221F' }}
-              onClick={() => updateEvidenceStatus(row.id, 'Rejected')}
+              onClick={() => setRejectionModal({ item: row, feedback: row.client_feedback || '' })}
               disabled={row.status === 'Rejected'}
             >
               Reject
@@ -153,11 +216,29 @@ const EvidenceReview = () => {
           </div>
         );
       }
+    },
+    {
+      header: 'Client Feedback',
+      accessor: 'client_feedback',
+      sortable: false,
+      cell: (row) => <FeedbackCell row={row} onUpdateFeedback={updateEvidenceNotes} />
+    },
+    {
+      header: 'Auditor Notes',
+      accessor: 'auditor_notes_internal',
+      sortable: false,
+      cell: (row) => <NotesCell row={row} />
+    },
+    { header: 'Upload Date', accessor: 'date' },
+    {
+      header: 'Reviewed At',
+      accessor: 'reviewed_at',
+      cell: (row) => row.reviewed_at ? <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{row.reviewed_at}</span> : '-'
     }
   ];
 
   const filterOptions = [
-    { label: 'Status', key: 'status', options: ['Pending Review', 'Under AI Analysis', 'Approved', 'Rejected'] }
+    { label: 'Status', key: 'status', options: ['Awaiting Upload', 'Pending Review', 'Under AI Analysis', 'Approved', 'Rejected'] }
   ];
 
   return (
@@ -173,11 +254,11 @@ const EvidenceReview = () => {
       <div className="metrics-grid">
         <div className="metric-card" style={{ borderLeft: '4px solid var(--text-muted)' }}>
           <div className="metric-content">
-            <span className="metric-label">Total Evidence Files</span>
-            <span className="metric-value">{totalFiles}</span>
+            <span className="metric-label">Awaiting Upload</span>
+            <span className="metric-value">{awaitingCount}</span>
           </div>
           <div className="metric-icon-wrapper" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-            <FileText size={24} />
+            <Clock size={24} />
           </div>
         </div>
 
@@ -318,6 +399,85 @@ const EvidenceReview = () => {
               title={previewState.fileName}
               style={{ flex: 1, border: 'none', width: '100%' }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Rejection Feedback Modal */}
+      {rejectionModal && (
+        <div
+          onClick={() => setRejectionModal(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 1000,
+            backgroundColor: 'rgba(0,0,0,0.6)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'var(--bg-card, #fff)',
+              borderRadius: '12px',
+              padding: '24px',
+              maxWidth: '520px',
+              width: '90%',
+              boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
+              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#FCE8E6', color: '#C5221F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                <XCircle size={20} />
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: '17px', color: 'var(--text-primary)' }}>
+                  Reject Evidence & Provide Feedback
+                </h3>
+                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                  File: <strong>{rejectionModal.item?.fileName}</strong> | Client: <strong>{rejectionModal.item?.client}</strong>
+                </span>
+              </div>
+            </div>
+
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-primary)' }}>
+                Rejection Reason / Client Feedback <span style={{ color: '#C5221F' }}>*</span>
+              </label>
+              <textarea
+                value={rejectionModal.feedback}
+                onChange={(e) => setRejectionModal({ ...rejectionModal, feedback: e.target.value })}
+                placeholder="Explain why this evidence is being rejected so the client can re-upload..."
+                rows={4}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  borderRadius: '6px',
+                  border: '1px solid var(--border-color)',
+                  fontSize: '13px',
+                  fontFamily: 'inherit',
+                  resize: 'vertical',
+                  boxSizing: 'border-box'
+                }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
+              <button
+                className="btn btn-outline"
+                onClick={() => setRejectionModal(null)}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-primary"
+                style={{ backgroundColor: '#C5221F', borderColor: '#C5221F', display: 'flex', alignItems: 'center', gap: '6px' }}
+                onClick={async () => {
+                  await updateEvidenceStatus(rejectionModal.item.id, 'Rejected', rejectionModal.feedback);
+                  setRejectionModal(null);
+                }}
+              >
+                <Save size={14} /> Save & Reject
+              </button>
+            </div>
           </div>
         </div>
       )}

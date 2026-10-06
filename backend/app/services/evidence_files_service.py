@@ -153,6 +153,7 @@ def get_company_evidence(db: Session, company_id: str):
     return (
         db.query(EvidenceItem)
         .filter(EvidenceItem.company_id == company_id)
+        .filter(EvidenceItem.is_superseded == False)
         .order_by(EvidenceItem.created_at.desc())
         .all()
     )
@@ -162,7 +163,9 @@ def get_evidence_for_audit_control(db: Session, audit_control_id: str):
     return (
         db.query(AuditControlEvidence)
         .options(joinedload(AuditControlEvidence.evidence_item))
+        .join(AuditControlEvidence.evidence_item)
         .filter(AuditControlEvidence.audit_control_id == audit_control_id)
+        .filter(EvidenceItem.is_superseded == False)
         .all()
     )
 
@@ -174,7 +177,9 @@ def get_evidence_for_multiple_controls(db: Session, audit_control_ids: list[str]
             joinedload(AuditControlEvidence.evidence_item)
             .joinedload(EvidenceItem.user)
         )
+        .join(AuditControlEvidence.evidence_item)
         .filter(AuditControlEvidence.audit_control_id.in_(audit_control_ids))
+        .filter(EvidenceItem.is_superseded == False)
         .all()
     )
 
@@ -208,7 +213,7 @@ def unlink_evidence(db: Session, audit_control_evidence_id: str):
     db.delete(link)
     db.commit()
 
-    return {"message": "Evidence unlinked from this audit control"}
+    return None
 
 
 def update_evidence_item(db: Session, evidence_item_id: str, data):
@@ -235,6 +240,14 @@ def delete_evidence_item(db: Session, evidence_item_id: str):
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidence Item not found")
 
+    # Soft Delete Logic: If it has already been reviewed (e.g., Rejected), we keep the historical record.
+    # If it is still "Pending Review", it means the client made a mistake uploading and we can hard-delete to save space.
+    if evidence.status != "Pending Review":
+        evidence.is_superseded = True
+        db.commit()
+        return {"message": "Evidence Item marked as superseded successfully"}
+
+    # Hard Delete
     storage_service.delete_object(evidence.storage_key)
     db.delete(evidence)  # cascades to audit_control_links
     db.commit()
@@ -264,6 +277,18 @@ def update_auditor_notes(db: Session, evidence_item_id: str, data):
         raise HTTPException(status_code=404, detail="Evidence Item not found")
 
     evidence.auditor_notes = data.auditor_notes
+
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+def update_client_feedback(db: Session, evidence_item_id: str, client_feedback: str):
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_item_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence Item not found")
+
+    evidence.client_feedback = client_feedback
 
     db.commit()
     db.refresh(evidence)

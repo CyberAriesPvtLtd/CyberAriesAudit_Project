@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Integer, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -23,7 +23,9 @@ class EvidenceItem(Base):
     mime_type = Column(String, nullable=True)
     ai_notes = Column(String, nullable=True)
     auditor_notes = Column(String, nullable=True)
+    client_feedback = Column(String, nullable=True)
     status = Column(String, nullable=False, default="Pending Review")
+    is_superseded = Column(Boolean, default=False)
 
     company_id = Column(String, ForeignKey("company.id"), nullable=False, index=True)
 

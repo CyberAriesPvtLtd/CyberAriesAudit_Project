@@ -19,6 +19,20 @@ def create_audit_framework(db: Session, audit_data):
             detail="Company not found"
         )
 
+    existing_audit = db.query(AuditFramework).filter(
+        AuditFramework.company_id == audit_data.company_id,
+        AuditFramework.audit_type == audit_data.audit_type,
+        AuditFramework.audit_category == audit_data.audit_category,
+        AuditFramework.audit_subcategory == audit_data.audit_subcategory,
+        AuditFramework.target_fy == audit_data.target_fy
+    ).first()
+
+    if existing_audit:
+        raise HTTPException(
+            status_code=409,
+            detail="An audit framework of this type already exists for this company in the target financial year"
+        )
+
     audit_framework = AuditFramework(
         audit_type=audit_data.audit_type,
         audit_category=audit_data.audit_category,
@@ -139,6 +153,4 @@ def delete_audit_framework(
     db.delete(audit_framework)
     db.commit()
 
-    return {
-        "message": "Audit Framework deleted successfully"
-    }
+    return None

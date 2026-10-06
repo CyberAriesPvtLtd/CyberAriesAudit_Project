@@ -33,6 +33,7 @@ class EvidenceItemUpdate(BaseModel):
 
     ai_notes: Optional[str] = None
     auditor_notes: Optional[str] = None
+    client_feedback: Optional[str] = None
     status: Optional[str] = None
     reviewed_by: Optional[str] = None
 
@@ -52,7 +53,9 @@ class EvidenceItemResponse(BaseModel):
     mime_type: Optional[str] = None
     ai_notes: Optional[str] = None
     auditor_notes: Optional[str] = None
+    client_feedback: Optional[str] = None
     status: str
+    is_superseded: bool
     company_id: str
 
     uploaded_by: str
