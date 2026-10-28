@@ -1,12 +1,13 @@
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
-from app.utils.security import require_admin
+from app.utils.security import require_admin, require_auditor, get_current_user
 
 from app.database_dependency import get_db
 
 from app.schemas.audit_control_schema import (
     AuditControlCreate,
     AuditControlUpdate,
+    AuditControlEvaluate,
     AuditControlResponse,
 )
 
@@ -17,7 +18,10 @@ from app.services.audit_control_service import (
     get_audit_controls_by_framework,
     update_audit_control,
     delete_audit_control,
+    evaluate_audit_control,
 )
+
+from app.models.user import User
 
 router = APIRouter(
     prefix="/audit-control",
@@ -69,6 +73,21 @@ def edit_audit_control(
         db,
         audit_control_id,
         audit_control
+    )
+
+
+@router.patch("/{audit_control_id}/evaluate", response_model=AuditControlResponse)
+def evaluate_control(
+    audit_control_id: str,
+    evaluation: AuditControlEvaluate,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_auditor)
+):
+    return evaluate_audit_control(
+        db,
+        audit_control_id,
+        evaluation,
+        current_user
     )
 
 

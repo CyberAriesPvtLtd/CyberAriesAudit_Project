@@ -27,8 +27,11 @@ from app.routers.controls_router import router as controls_router
 from app.routers.audit_control_router import router as audit_control_router
 from app.routers.evidence_files_router import router as evidence_files_router
 
-# Create all database tables
+from app.migrations.add_evaluation_columns import run_migration
+
+# Create all database tables and ensure evaluation columns exist
 Base.metadata.create_all(bind=engine)
+run_migration()
 
 # Seed default admin user and sync controls from Excel files
 with SessionLocal() as db:

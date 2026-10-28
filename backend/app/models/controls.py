@@ -35,6 +35,12 @@ class Controls(Base):
         server_default="{}",
         default=list,
     )
+
+    # ── Static report columns (seeded from Excel) ──
+    system_entity = Column(String, nullable=True)         # System (RE / Vendor) — e.g. "Governance Team", "IT Team"
+    cia_classification = Column(String, nullable=True)    # C/I/A — e.g. "C", "I", "A", "C/I", "C/I/A"
+    test_procedure = Column(String, nullable=True)        # Test Cases Used — e.g. "Password policy review"
+
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
     audit_controls = relationship("AuditControl", back_populates="control")

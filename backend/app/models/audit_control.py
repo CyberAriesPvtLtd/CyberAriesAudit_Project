@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, DateTime, ForeignKey
+from sqlalchemy import Column, String, Integer, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime, timezone
 
@@ -17,6 +17,18 @@ class AuditControl(Base):
     framework_id = Column(String,ForeignKey("audit_framework.id"),nullable=False,index=True)
     control_id = Column(String,ForeignKey("controls.id"),nullable=False,index=True)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+    # ── Dynamic: Auditor sets these during evaluation ──
+    compliance_status = Column(String, nullable=True)     # Compliant / Partially Compliant / Non-Compliant / Not Applicable
+    risk_rating = Column(String, nullable=True)           # Critical / High / Medium / Low
+    similar_issue = Column(Boolean, nullable=True)        # Yes(true) / No(false)
+
+    # ── Default-but-editable: Filled when non-compliant ──
+    root_cause_analysis = Column(String, nullable=True)
+    impact_analysis = Column(String, nullable=True)
+    recommendation = Column(String, nullable=True)
+    remediation_days = Column(Integer, nullable=True)
+    management_response = Column(String, nullable=True)
 
     # Relationships
     user = relationship("User",back_populates="assigned_audit_controls")

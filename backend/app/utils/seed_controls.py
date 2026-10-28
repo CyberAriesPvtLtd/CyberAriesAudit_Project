@@ -68,6 +68,15 @@ COLUMN_ALIASES = {
         "secondarysupportingevidence", "secondaryevidence",
         "secondarydocuments", "supportingevidence",
     ],
+    "system_entity": [
+        "system", "systemrevendor", "systementity", "revendor", "entity",
+    ],
+    "cia_classification": [
+        "cia", "ciaclassification", "ciatriad", "ciaimpact",
+    ],
+    "test_procedure": [
+        "testcasesused", "testcases", "testprocedure", "testprocedureused", "teststeps",
+    ],
 }
 
 
@@ -136,6 +145,9 @@ UPDATABLE_FIELDS = (
     "control_desc",
     "primary_evidence",
     "secondary_evidence",
+    "system_entity",
+    "cia_classification",
+    "test_procedure",
 )
 
 
@@ -317,6 +329,9 @@ def parse_workbook(path: Path):
             "control_desc": control_desc,
             "primary_evidence": split_evidence(get(row, "primary_evidence")),
             "secondary_evidence": split_evidence(get(row, "secondary_evidence")),
+            "system_entity": clean_text(get(row, "system_entity")),
+            "cia_classification": clean_text(get(row, "cia_classification")),
+            "test_procedure": clean_text(get(row, "test_procedure")),
             "_source": f"{path.name}:{row_number}",
         })
 

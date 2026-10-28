@@ -30,6 +30,9 @@ class ControlsCreate(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: List[str] = []
     secondary_evidence: List[str] = []
+    system_entity: Optional[str] = None
+    cia_classification: Optional[str] = None
+    test_procedure: Optional[str] = None
 
     @field_validator("primary_evidence", "secondary_evidence", mode="before")
     @classmethod
@@ -47,6 +50,9 @@ class ControlsUpdate(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: Optional[List[str]] = None
     secondary_evidence: Optional[List[str]] = None
+    system_entity: Optional[str] = None
+    cia_classification: Optional[str] = None
+    test_procedure: Optional[str] = None
 
     @field_validator("primary_evidence", "secondary_evidence", mode="before")
     @classmethod
@@ -65,6 +71,9 @@ class ControlsResponse(BaseModel):
     control_domain: Optional[str] = None
     primary_evidence: List[str] = []
     secondary_evidence: List[str] = []
+    system_entity: Optional[str] = None
+    cia_classification: Optional[str] = None
+    test_procedure: Optional[str] = None
 
     # Comma-joined convenience fields for tables and exports. The arrays above
     # remain the source of truth.
