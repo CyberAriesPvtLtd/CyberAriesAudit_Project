@@ -123,6 +123,28 @@ export const updateEvidenceStatus = async (evidenceItemId, status, userId) => {
   return data;
 };
 
+/*
+ * Control Evaluation — updates compliance status, risk, and non-compliance observations.
+ * PATCH /audit-control/{audit_control_id}/evaluate
+ */
+export const evaluateAuditControl = async (auditControlId, evaluationData) => {
+  const { data } = await axiosClient.patch(
+    `/audit-control/${auditControlId}/evaluate`,
+    evaluationData
+  );
+  return data;
+};
+
+export const getAuditControlById = async (auditControlId) => {
+  const { data } = await axiosClient.get(`/audit-control/${auditControlId}`);
+  return data;
+};
+
+export const getAuditControlsByFramework = async (frameworkId) => {
+  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
+  return data;
+};
+
 // Default export for convenience
 const api = {
   login,
@@ -131,6 +153,9 @@ const api = {
   getAuditFrameworks,
   getCompanies,
   getAuditControls,
+  getAuditControlById,
+  getAuditControlsByFramework,
+  evaluateAuditControl,
   getEvidenceByCompany,
   getEvidenceForAuditControl,
   getEvidenceBatch,
