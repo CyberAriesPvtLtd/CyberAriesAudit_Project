@@ -1,309 +1,549 @@
-import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { FileText, CheckCircle, Clock, XCircle, Shield, ArrowRight, Save, ExternalLink, X } from 'lucide-react';
+import React, { useState, useMemo } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import {
+  FileText,
+  CheckCircle,
+  Clock,
+  XCircle,
+  Shield,
+  ShieldCheck,
+  CheckCircle2,
+  AlertTriangle,
+  FileCheck,
+  Eye,
+  X
+} from 'lucide-react';
 import ExcelTable from '../components/ExcelTable';
 import { useAuth } from '../context/AuthContext';
-import api from '../services/api';
 
-const NotesCell = ({ row }) => {
-  const [notes, setNotes] = useState(row.auditor_notes || '');
-  const [saving, setSaving] = useState(false);
+// Helper for rendering Control Domain Badges
+const renderDomainBadge = (domain) => {
+  const dom = (domain || '').toUpperCase();
+  let bg = '#E8F0FE';
+  let color = '#1A73E8';
+  let border = '#ADCEFE';
 
-  const handleSave = async (e) => {
-    e.stopPropagation();
-    setSaving(true);
-    try {
-      await api.updateEvidenceNotes(row.id, notes);
-    } catch (error) {
-      console.error("Failed to save notes", error);
-    }
-    setSaving(false);
-  };
-
-  if (row.status === 'Awaiting Upload') {
-    return <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>-</span>;
+  if (dom.includes('GV') || dom.includes('GOVERN')) {
+    bg = '#E8F0FE'; color = '#1A73E8'; border = '#ADCEFE';
+  } else if (dom.includes('ID') || dom.includes('IDENTIFY')) {
+    bg = '#E0F7FA'; color = '#00838F'; border = '#80DEEA';
+  } else if (dom.includes('PR') || dom.includes('PROTECT')) {
+    bg = '#E6F4EA'; color = '#137333'; border = '#A8DAB5';
+  } else if (dom.includes('DE') || dom.includes('DETECT')) {
+    bg = '#FEF7E0'; color = '#B06000'; border = '#FDE293';
+  } else if (dom.includes('RS') || dom.includes('RESPOND')) {
+    bg = '#FCE8E6'; color = '#C5221F'; border = '#FAD2CF';
+  } else if (dom.includes('RC') || dom.includes('RECOVER')) {
+    bg = '#F3E8FD'; color = '#7B1FA2'; border = '#E1BEE7';
   }
 
   return (
-    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-      <textarea
-        value={notes}
-        onChange={(e) => setNotes(e.target.value)}
-        style={{ width: '150px', height: '30px', fontSize: '11px', padding: '4px', borderRadius: '4px', border: '1px solid var(--border-color)', resize: 'vertical' }}
-        placeholder="Add notes..."
-      />
-      <button
-        className="btn btn-primary"
-        style={{ padding: '4px 8px', fontSize: '11px', minWidth: 'unset', display: 'flex', alignItems: 'center', justifyContent: 'center' }}
-        onClick={handleSave}
-        disabled={saving}
-      >
-        <Save size={14} />
-      </button>
-    </div>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '3px 8px',
+        borderRadius: '5px',
+        fontSize: '11px',
+        fontWeight: '600',
+        backgroundColor: bg,
+        color: color,
+        border: `1px solid ${border}`,
+        whiteSpace: 'nowrap'
+      }}
+    >
+      {domain || 'General'}
+    </span>
   );
 };
 
-const FeedbackCell = ({ row, onUpdateFeedback }) => {
-  const [feedback, setFeedback] = useState(row.client_feedback || '');
-  const [saving, setSaving] = useState(false);
-
-  React.useEffect(() => {
-    setFeedback(row.client_feedback || '');
-  }, [row.client_feedback]);
-
-  if (row.status !== 'Rejected') {
-    return <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontStyle: 'italic' }}>Only available when rejected</span>;
+// Helper for Compliance Status Badges
+const renderComplianceBadge = (status) => {
+  if (!status) {
+    return (
+      <span style={{ fontSize: '11.5px', color: 'var(--text-muted)', fontStyle: 'italic', display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        <Clock size={12} /> Pending Evaluation
+      </span>
+    );
   }
 
-  const handleSave = async (e) => {
-    e.stopPropagation();
-    setSaving(true);
-    try {
-      await onUpdateFeedback(row.id, feedback);
-    } catch (err) {
-      console.error("Failed to save feedback", err);
-    }
-    setSaving(false);
-  };
+  let bg = '#F1F3F4';
+  let color = '#5F6368';
+  let border = '#DADCE0';
+
+  if (status === 'Compliant') {
+    bg = '#E6F4EA'; color = '#137333'; border = '#A8DAB5';
+  } else if (status === 'Partially Compliant') {
+    bg = '#FEF7E0'; color = '#B06000'; border = '#FDE293';
+  } else if (status === 'Non-Compliant') {
+    bg = '#FCE8E6'; color = '#C5221F'; border = '#FAD2CF';
+  } else if (status === 'Not Applicable') {
+    bg = '#F1F3F4'; color = '#5F6368'; border = '#DADCE0';
+  }
 
   return (
-    <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }} onClick={(e) => e.stopPropagation()}>
-      <textarea
-        value={feedback}
-        onChange={(e) => setFeedback(e.target.value)}
-        style={{
-          width: '150px',
-          height: '32px',
-          fontSize: '11px',
-          padding: '4px',
-          borderRadius: '4px',
-          border: '1px solid #FCA5A5',
-          backgroundColor: '#FEF2F2',
-          resize: 'vertical'
-        }}
-        placeholder="Reason for rejection..."
-      />
-      <button
-        className="btn btn-primary"
-        style={{
-          padding: '4px 8px',
-          fontSize: '11px',
-          minWidth: 'unset',
-          display: 'flex',
-          alignItems: 'center',
-          justify: 'center',
-          backgroundColor: '#C5221F',
-          borderColor: '#C5221F'
-        }}
-        onClick={handleSave}
-        disabled={saving}
-        title="Save Client Feedback"
-      >
-        <Save size={14} />
-      </button>
-    </div>
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '3px 9px',
+        borderRadius: '6px',
+        fontSize: '11.5px',
+        fontWeight: '600',
+        backgroundColor: bg,
+        color: color,
+        border: `1px solid ${border}`,
+        whiteSpace: 'nowrap'
+      }}
+    >
+      {status === 'Compliant' && <CheckCircle size={12} style={{ marginRight: '4px' }} />}
+      {status === 'Partially Compliant' && <AlertTriangle size={12} style={{ marginRight: '4px' }} />}
+      {status === 'Non-Compliant' && <XCircle size={12} style={{ marginRight: '4px' }} />}
+      {status}
+    </span>
+  );
+};
+
+// Helper for Risk Rating Badges
+const renderRiskBadge = (risk) => {
+  if (!risk) return <span style={{ color: 'var(--text-muted)', fontSize: '12px' }}>-</span>;
+
+  let bg = '#EFF6FF';
+  let color = '#1E40AF';
+  let border = '#BFDBFE';
+
+  if (risk === 'Critical') {
+    bg = '#FEF2F2'; color = '#991B1B'; border = '#FECACA';
+  } else if (risk === 'High') {
+    bg = '#FFF1F2'; color = '#BE123C'; border = '#FECDD3';
+  } else if (risk === 'Medium') {
+    bg = '#FFFBEB'; color = '#B45309'; border = '#FDE68A';
+  } else if (risk === 'Low') {
+    bg = '#F0FDF4'; color = '#15803D'; border = '#BBF7D0';
+  }
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        padding: '2px 8px',
+        borderRadius: '4px',
+        fontSize: '11px',
+        fontWeight: '700',
+        backgroundColor: bg,
+        color: color,
+        border: `1px solid ${border}`,
+        textTransform: 'uppercase',
+        letterSpacing: '0.04em'
+      }}
+    >
+      {risk}
+    </span>
   );
 };
 
 const EvidenceReview = () => {
-  const { selectedClient, selectedAudit, activeAuditData, updateEvidenceStatus, updateEvidenceNotes } = useAuth();
+  const {
+    assignedClients,
+    clientAuditsMapping,
+    selectedClient,
+    selectedAudit,
+    switchClient,
+    switchAudit,
+    activeAuditData
+  } = useAuth();
 
-  // Preview modal state — null when closed, { url, fileName } when open
-  const [previewState, setPreviewState] = useState(null);
-  // Description modal state — null when closed, string when open
+  const navigate = useNavigate();
+
+  // Description modal state — null when closed, { title, description, testProcedure } when open
   const [descModal, setDescModal] = useState(null);
-  // Rejection feedback modal state — null when closed, { item, feedback } when open
-  const [rejectionModal, setRejectionModal] = useState(null);
 
+  const rawControls = activeAuditData.controls || [];
   const evidenceItems = activeAuditData.evidence || [];
 
-  // KPI Calculations
-  const awaitingCount = evidenceItems.filter(e => e.status === 'Awaiting Upload').length;
-  const pendingCount = evidenceItems.filter(e => e.status === 'Pending Review' || e.status === 'Under AI Analysis').length;
-  const approvedCount = evidenceItems.filter(e => e.status === 'Approved').length;
-  const rejectedCount = evidenceItems.filter(e => e.status === 'Rejected').length;
+  // Map controls for clean display in ExcelTable
+  const mappedControls = useMemo(() => {
+    return rawControls.map(ac => {
+      const c = ac.control || {};
+      const rules = c.framework_rules && c.framework_rules.length > 0
+        ? c.framework_rules.join(', ')
+        : (c.control_id || ac.control_id || 'CTRL');
 
-  const columns = [
+      // Check linked evidence count from mapped evidence
+      const linkedEvidence = evidenceItems.filter(ev => {
+        const evCode = String(ev.controlId || '').toLowerCase();
+        const ruleCode = String(rules).toLowerCase();
+        const cId = String(c.control_id || '').toLowerCase();
+        return evCode.includes(ruleCode) || ruleCode.includes(evCode) || (cId && evCode.includes(cId));
+      });
+
+      return {
+        id: ac.id,
+        auditControlId: ac.id,
+        controlId: c.id || ac.control_id,
+        ruleCode: rules,
+        rulesList: c.framework_rules || [rules],
+        description: c.control_desc || 'No description provided for this control.',
+        domain: c.control_domain || 'General',
+        systemEntity: c.system_entity || 'RE / IT',
+        cia: c.cia_classification || 'C/I/A',
+        testProcedure: c.test_procedure || 'Verify policy enforcement and configuration settings.',
+        complianceStatus: ac.compliance_status || null,
+        riskRating: ac.risk_rating || null,
+        status: ac.status || 'Pending Review',
+        evidenceCount: linkedEvidence.length,
+        evidenceFiles: linkedEvidence
+      };
+    });
+  }, [rawControls, evidenceItems]);
+
+  // KPI Calculations
+  const totalControls = mappedControls.length;
+  const evaluatedControls = mappedControls.filter(c => c.complianceStatus && c.complianceStatus !== '').length;
+  const compliantControls = mappedControls.filter(c => c.complianceStatus === 'Compliant').length;
+  const pendingControls = totalControls - evaluatedControls;
+  const totalFiles = evidenceItems.length;
+
+  // ─── Table Columns: Assigned Controls Evaluation ─────────────────
+  const controlColumns = [
     {
       header: 'Framework Code',
-      accessor: 'controlId',
-      cell: (row) => {
-        const codes = row.controlId ? row.controlId.split(',').map(c => c.trim()).filter(Boolean) : [];
-        return (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', alignItems: 'flex-start' }}>
-            {codes.map((code, idx) => (
-              <code key={idx} style={{ fontSize: '11px', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace', whiteSpace: 'nowrap' }}>
-                {code}
-              </code>
-            ))}
-          </div>
-        );
-      }
-    },
-    { 
-      header: 'Description', 
-      accessor: 'controlDesc',
+      accessor: 'ruleCode',
+      sortable: true,
+      width: '160px',
       cell: (row) => (
-        <button
-          onClick={(e) => { e.stopPropagation(); setDescModal(row.controlDesc); }}
-          className="btn btn-outline"
-          style={{ padding: '4px 8px', fontSize: '11px', display: 'flex', alignItems: 'center', color: 'var(--text-secondary)' }}
-        >
-          <FileText size={14} style={{ marginRight: '4px' }} />
-          View Desc
-        </button>
-      )
-    },
-    {
-      header: 'File Name',
-      accessor: 'fileName',
-      cell: (row) => (
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 550 }}>
-          <FileText size={16} style={{ color: 'var(--text-secondary)' }} />
-          <span>{row.fileName}</span>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px' }}>
+          {row.rulesList.map((r, i) => (
+            <code
+              key={i}
+              style={{
+                fontSize: '12px',
+                padding: '3px 7px',
+                borderRadius: '4px',
+                fontFamily: 'monospace',
+                fontWeight: 700,
+                backgroundColor: 'var(--bg-main)',
+                color: 'var(--primary)',
+                border: '1px solid var(--border-color)',
+                display: 'inline-block'
+              }}
+            >
+              {r}
+            </code>
+          ))}
         </div>
       )
     },
-    { header: 'Status', accessor: 'status', isStatus: true },
     {
-      header: 'Review Actions',
+      header: 'Description',
+      accessor: 'description',
+      sortable: false,
+      cell: (row) => (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px' }}>
+          <span
+            style={{
+              fontSize: '12.5px',
+              color: 'var(--text-primary)',
+              lineHeight: '1.4',
+              display: '-webkit-box',
+              WebkitLineClamp: 2,
+              WebkitBoxOrient: 'vertical',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              maxWidth: '380px'
+            }}
+            title={row.description}
+          >
+            {row.description}
+          </span>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setDescModal({ title: row.ruleCode, description: row.description, testProcedure: row.testProcedure });
+            }}
+            className="btn btn-outline"
+            style={{ padding: '3px 8px', fontSize: '11px', whiteSpace: 'nowrap', display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'var(--text-secondary)' }}
+            title="Read full control requirement"
+          >
+            <Eye size={13} /> View
+          </button>
+        </div>
+      )
+    },
+    {
+      header: 'Domain',
+      accessor: 'domain',
+      sortable: true,
+      width: '120px',
+      cell: (row) => renderDomainBadge(row.domain)
+    },
+    {
+      header: 'System / Entity',
+      accessor: 'systemEntity',
+      sortable: true,
+      width: '120px',
+      cell: (row) => (
+        <span style={{ fontSize: '12px', color: 'var(--text-secondary)', fontWeight: 500 }}>
+          {row.systemEntity}
+        </span>
+      )
+    },
+    {
+      header: 'C/I/A',
+      accessor: 'cia',
+      sortable: true,
+      width: '80px',
+      cell: (row) => (
+        <code style={{ fontSize: '11px', color: 'var(--text-secondary)', padding: '2px 5px', borderRadius: '4px', background: 'var(--bg-hover)' }}>
+          {row.cia}
+        </code>
+      )
+    },
+    {
+      header: 'Evidence Submitted',
+      accessor: 'evidenceCount',
+      sortable: true,
+      width: '130px',
+      cell: (row) => (
+        <span
+          style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontSize: '11.5px',
+            fontWeight: 600,
+            padding: '3px 8px',
+            borderRadius: '12px',
+            backgroundColor: row.evidenceCount > 0 ? '#E8F0FE' : 'var(--bg-hover)',
+            color: row.evidenceCount > 0 ? '#1A73E8' : 'var(--text-muted)'
+          }}
+        >
+          <FileText size={12} />
+          {row.evidenceCount} {row.evidenceCount === 1 ? 'file' : 'files'}
+        </span>
+      )
+    },
+    {
+      header: 'Compliance Status',
+      accessor: 'complianceStatus',
+      sortable: true,
+      width: '150px',
+      cell: (row) => renderComplianceBadge(row.complianceStatus)
+    },
+    {
+      header: 'Risk',
+      accessor: 'riskRating',
+      sortable: true,
+      width: '90px',
+      cell: (row) => renderRiskBadge(row.riskRating)
+    },
+    {
+      header: 'Audit Action',
       accessor: 'action',
       sortable: false,
-      cell: (row) => {
-        const handlePreview = async (e) => {
-          e.stopPropagation();
-          try {
-            const data = await api.getEvidenceDownloadUrl(row.id);
-            if (data.download_url) {
-              setPreviewState({ url: data.download_url, fileName: data.file_name || row.fileName });
-            }
-          } catch (err) {
-            console.error("Failed to get preview URL", err);
-          }
-        };
-
-        if (row.status === 'Awaiting Upload') {
-          return <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Waiting for client...</span>;
-        }
-
-        return (
-          <div style={{ display: 'flex', gap: '8px' }} onClick={(e) => e.stopPropagation()}>
-            <button
-              className="btn btn-outline"
-              style={{ padding: '4px 8px', fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
-              onClick={handlePreview}
-            >
-              <ExternalLink size={14} style={{ marginRight: '4px' }} />
-              Preview
-            </button>
-            <button
-              className="btn btn-outline"
-              style={{ padding: '4px 8px', fontSize: '11px', borderColor: '#10B981', color: '#137333' }}
-              onClick={() => updateEvidenceStatus(row.id, 'Approved')}
-              disabled={row.status === 'Approved'}
-            >
-              Approve
-            </button>
-            <button
-              className="btn btn-outline"
-              style={{ padding: '4px 8px', fontSize: '11px', borderColor: '#C5221F', color: '#C5221F' }}
-              onClick={() => setRejectionModal({ item: row, feedback: row.client_feedback || '' })}
-              disabled={row.status === 'Rejected'}
-            >
-              Reject
-            </button>
-          </div>
-        );
-      }
-    },
-    {
-      header: 'Client Feedback',
-      accessor: 'client_feedback',
-      sortable: false,
-      cell: (row) => <FeedbackCell row={row} onUpdateFeedback={updateEvidenceNotes} />
-    },
-    {
-      header: 'Auditor Notes',
-      accessor: 'auditor_notes_internal',
-      sortable: false,
-      cell: (row) => <NotesCell row={row} />
-    },
-    { header: 'Upload Date', accessor: 'date' },
-    {
-      header: 'Reviewed At',
-      accessor: 'reviewed_at',
-      cell: (row) => row.reviewed_at ? <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>{row.reviewed_at}</span> : '-'
+      width: '140px',
+      cell: (row) => (
+        <Link
+          to={`/control-details/${encodeURIComponent(row.auditControlId)}`}
+          className="btn btn-primary"
+          style={{
+            padding: '5px 12px',
+            fontSize: '12px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '6px',
+            textDecoration: 'none',
+            whiteSpace: 'nowrap'
+          }}
+        >
+          <FileCheck size={14} /> Evaluate Control
+        </Link>
+      )
     }
   ];
 
-  const filterOptions = [
-    { label: 'Status', key: 'status', options: ['Awaiting Upload', 'Pending Review', 'Under AI Analysis', 'Approved', 'Rejected'] }
-  ];
+  // Empty state if no assigned clients in database
+  if (!selectedClient || assignedClients.length === 0) {
+    return (
+      <div className="page-container">
+        <div className="page-header">
+          <div className="page-title-section">
+            <h1 className="page-title">Evidence Review & Controls Evaluation</h1>
+            <p className="page-subtitle">Examine deliverables and record regulatory compliance assessments.</p>
+          </div>
+        </div>
+
+        <div
+          className="dashboard-section-card"
+          style={{
+            padding: '48px 24px',
+            textAlign: 'center',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: '16px'
+          }}
+        >
+          <div
+            style={{
+              width: '64px',
+              height: '64px',
+              borderRadius: '50%',
+              backgroundColor: 'var(--bg-hover)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--text-muted)'
+            }}
+          >
+            <Shield size={32} />
+          </div>
+          <h2 style={{ fontSize: '18px', fontWeight: 600, color: 'var(--text-primary)', margin: 0 }}>
+            No Assigned Client Audits Found
+          </h2>
+          <p style={{ fontSize: '14px', color: 'var(--text-secondary)', maxWidth: '460px', margin: 0 }}>
+            There are currently no active audit frameworks assigned to your auditor profile in the database. When an administrator assigns audit controls to you, they will appear here.
+          </p>
+          <button className="btn btn-primary" onClick={() => navigate('/assigned-audits')} style={{ marginTop: '8px' }}>
+            View Assigned Portfolios
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="page-container">
-      <div className="page-header">
+      {/* ─── Page Header with Client & Audit Context ─────────────────── */}
+      <div className="page-header" style={{ marginBottom: '20px' }}>
         <div className="page-title-section">
-          <h1 className="page-title">Evidence Review : {selectedClient}</h1>
-          <p className="page-subtitle">Examine and approve evidence files submitted for {selectedAudit} control verification.</p>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '4px' }}>
+            <span className="badge badge-active" style={{ fontSize: '12px' }}>
+              {selectedClient}
+            </span>
+            <span style={{ color: 'var(--text-muted)', fontSize: '13px' }}>•</span>
+            <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--primary)' }}>
+              {selectedAudit}
+            </span>
+          </div>
+          <h1 className="page-title" style={{ fontSize: '24px', fontWeight: 700 }}>
+            Evidence Review & Control Evaluation
+          </h1>
+          <p className="page-subtitle">
+            Manage your assigned controls, inspect client-submitted deliverables, and execute your compliance evaluations.
+          </p>
         </div>
+
+        {/* Client & Audit Workspace Switcher */}
+        {assignedClients.length > 1 && (
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            <select
+              value={selectedClient}
+              onChange={(e) => switchClient(e.target.value)}
+              className="form-control"
+              style={{ fontSize: '13px', padding: '6px 12px', minWidth: '160px' }}
+            >
+              {assignedClients.map(c => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            {clientAuditsMapping[selectedClient] && clientAuditsMapping[selectedClient].length > 1 && (
+              <select
+                value={selectedAudit}
+                onChange={(e) => switchAudit(e.target.value)}
+                className="form-control"
+                style={{ fontSize: '13px', padding: '6px 12px', minWidth: '140px' }}
+              >
+                {clientAuditsMapping[selectedClient].map(a => (
+                  <option key={a} value={a}>{a}</option>
+                ))}
+              </select>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* KPI Cards */}
-      <div className="metrics-grid">
-        <div className="metric-card" style={{ borderLeft: '4px solid var(--text-muted)' }}>
+      {/* ─── KPI Metrics Grid ─────────────────────────────────────────── */}
+      <div className="metrics-grid" style={{ marginBottom: '24px' }}>
+        <div className="metric-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="metric-content">
-            <span className="metric-label">Awaiting Upload</span>
-            <span className="metric-value">{awaitingCount}</span>
+            <span className="metric-label">Assigned Controls</span>
+            <span className="metric-value">{totalControls}</span>
           </div>
-          <div className="metric-icon-wrapper" style={{ backgroundColor: 'var(--bg-hover)', color: 'var(--text-secondary)' }}>
-            <Clock size={24} />
-          </div>
-        </div>
-
-        <div className="metric-card" style={{ borderLeft: '4px solid #B06000' }}>
-          <div className="metric-content">
-            <span className="metric-label">Pending Review</span>
-            <span className="metric-value">{pendingCount}</span>
-          </div>
-          <div className="metric-icon-wrapper" style={{ backgroundColor: '#FEF7E0', color: '#B06000' }}>
-            <Clock size={24} />
+          <div className="metric-icon-wrapper" style={{ backgroundColor: '#E8F0FE', color: 'var(--primary)' }}>
+            <ShieldCheck size={22} />
           </div>
         </div>
 
         <div className="metric-card" style={{ borderLeft: '4px solid #137333' }}>
           <div className="metric-content">
-            <span className="metric-label">Approved Files</span>
-            <span className="metric-value">{approvedCount}</span>
+            <span className="metric-label">Controls Evaluated</span>
+            <span className="metric-value">{evaluatedControls}</span>
           </div>
           <div className="metric-icon-wrapper" style={{ backgroundColor: '#E6F4EA', color: '#137333' }}>
-            <CheckCircle size={24} />
+            <CheckCircle2 size={22} />
           </div>
         </div>
 
-        <div className="metric-card" style={{ borderLeft: '4px solid #C5221F' }}>
+        <div className="metric-card" style={{ borderLeft: '4px solid #B06000' }}>
           <div className="metric-content">
-            <span className="metric-label">Rejected Files</span>
-            <span className="metric-value">{rejectedCount}</span>
+            <span className="metric-label">Pending Evaluation</span>
+            <span className="metric-value">{pendingControls}</span>
           </div>
-          <div className="metric-icon-wrapper" style={{ backgroundColor: '#FCE8E6', color: '#C5221F' }}>
-            <XCircle size={24} />
+          <div className="metric-icon-wrapper" style={{ backgroundColor: '#FEF7E0', color: '#B06000' }}>
+            <Clock size={22} />
+          </div>
+        </div>
+
+        <div className="metric-card" style={{ borderLeft: '4px solid #1A73E8' }}>
+          <div className="metric-content">
+            <span className="metric-label">Evidence Files Attached</span>
+            <span className="metric-value">{totalFiles}</span>
+          </div>
+          <div className="metric-icon-wrapper" style={{ backgroundColor: '#E8F0FE', color: '#1A73E8' }}>
+            <FileText size={22} />
           </div>
         </div>
       </div>
 
-      {/* ExcelTable Upgrade */}
-      <ExcelTable
-        columns={columns}
-        data={evidenceItems}
-        searchPlaceholder="Search evidence..."
-        searchKeys={['fileName', 'client', 'controlId', 'controlDesc', 'status']}
-        filterOptions={filterOptions}
-        tableName="Evidence_Review"
-      />
+      {/* ─── Assigned Controls Evaluation Table ────────────────── */}
+      <div>
+        {totalControls === 0 ? (
+          <div
+            className="dashboard-section-card"
+            style={{
+              padding: '40px 20px',
+              textAlign: 'center',
+              color: 'var(--text-secondary)'
+            }}
+          >
+            <ShieldCheck size={36} style={{ color: 'var(--text-muted)', marginBottom: '12px' }} />
+            <h3 style={{ fontSize: '16px', fontWeight: 600, color: 'var(--text-primary)', margin: '0 0 6px 0' }}>
+              No Controls Assigned for this Framework
+            </h3>
+            <p style={{ fontSize: '13px', margin: 0 }}>
+              No audit controls are currently allocated to you for {selectedAudit}. Check the Assigned Audits section or switch client projects.
+            </p>
+          </div>
+        ) : (
+          <ExcelTable
+            columns={controlColumns}
+            data={mappedControls}
+            searchPlaceholder="Search assigned controls by code, description, or domain..."
+            searchKeys={['ruleCode', 'description', 'domain', 'systemEntity', 'complianceStatus', 'riskRating']}
+            filterOptions={[
+              { label: 'Domain', key: 'domain', options: ['Governance', 'Identify', 'Protect', 'Detect', 'Respond', 'Recover'] },
+              { label: 'Compliance Status', key: 'complianceStatus', options: ['Compliant', 'Partially Compliant', 'Non-Compliant', 'Not Applicable'] },
+              { label: 'Risk Rating', key: 'riskRating', options: ['Critical', 'High', 'Medium', 'Low'] }
+            ]}
+            tableName={`Assigned_Controls_${selectedClient}_${selectedAudit}`}
+          />
+        )}
+      </div>
 
-      {/* Control Description Modal */}
+      {/* ─── Control Description & Test Procedure Modal ──────────────── */}
       {descModal && (
         <div
           onClick={() => setDescModal(null)}
@@ -319,163 +559,51 @@ const EvidenceReview = () => {
               background: 'var(--bg-card, #fff)',
               borderRadius: '12px',
               padding: '24px',
-              maxWidth: '500px',
+              maxWidth: '560px',
               width: '90%',
               boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
             }}
           >
-            <h3 style={{ marginTop: 0, marginBottom: '16px', fontSize: '18px', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <FileText size={20} style={{ color: 'var(--primary)' }} />
-              Control Description
-            </h3>
-            <p style={{ fontSize: '14px', color: 'var(--text-secondary)', lineHeight: '1.6', margin: 0 }}>
-              {descModal}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '24px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
+              <div>
+                <span className="badge badge-active" style={{ fontSize: '12px', marginBottom: '6px' }}>
+                  {descModal.title || 'Control Details'}
+                </span>
+                <h3 style={{ margin: '4px 0 0 0', fontSize: '17px', color: 'var(--text-primary)' }}>
+                  Requirement Specification
+                </h3>
+              </div>
+              <button
+                onClick={() => setDescModal(null)}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div style={{ marginBottom: '16px' }}>
+              <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                Control Description
+              </label>
+              <p style={{ fontSize: '13.5px', color: 'var(--text-primary)', lineHeight: '1.6', margin: 0, backgroundColor: 'var(--bg-hover)', padding: '12px', borderRadius: '6px' }}>
+                {descModal.description}
+              </p>
+            </div>
+
+            {descModal.testProcedure && (
+              <div style={{ marginBottom: '20px' }}>
+                <label style={{ display: 'block', fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)', marginBottom: '4px' }}>
+                  Test Procedure / Verification Guidance
+                </label>
+                <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.5', margin: 0, backgroundColor: 'var(--bg-hover)', padding: '12px', borderRadius: '6px' }}>
+                  {descModal.testProcedure}
+                </p>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
               <button className="btn btn-primary" onClick={() => setDescModal(null)}>
                 Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* In-page Evidence Preview Modal — avoids popup-block and page navigation */}
-      {previewState && (
-        <div
-          onClick={() => setPreviewState(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--bg-card, #fff)',
-              borderRadius: '12px',
-              boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
-              width: '80vw', height: '80vh',
-              display: 'flex', flexDirection: 'column',
-              overflow: 'hidden',
-            }}
-          >
-            {/* Modal Header */}
-            <div style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '14px 20px',
-              borderBottom: '1px solid var(--border-color)',
-              background: 'var(--bg-hover)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                <FileText size={18} style={{ color: 'var(--primary)' }} />
-                <span style={{ fontWeight: 600, fontSize: '14px', color: 'var(--text-primary)' }}>
-                  {previewState.fileName}
-                </span>
-              </div>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                {/* Fallback: open raw URL via anchor — anchor clicks are never popup-blocked */}
-                <a
-                  href={previewState.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  style={{ fontSize: '12px', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '4px', textDecoration: 'none' }}
-                >
-                  <ExternalLink size={13} /> Open in new tab
-                </a>
-                <button
-                  onClick={() => setPreviewState(null)}
-                  style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center' }}
-                >
-                  <X size={20} />
-                </button>
-              </div>
-            </div>
-
-            {/* File content rendered in iframe — stays within the Auditor app */}
-            <iframe
-              src={previewState.url}
-              title={previewState.fileName}
-              style={{ flex: 1, border: 'none', width: '100%' }}
-            />
-          </div>
-        </div>
-      )}
-
-      {/* Rejection Feedback Modal */}
-      {rejectionModal && (
-        <div
-          onClick={() => setRejectionModal(null)}
-          style={{
-            position: 'fixed', inset: 0, zIndex: 1000,
-            backgroundColor: 'rgba(0,0,0,0.6)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'var(--bg-card, #fff)',
-              borderRadius: '12px',
-              padding: '24px',
-              maxWidth: '520px',
-              width: '90%',
-              boxShadow: '0 8px 40px rgba(0,0,0,0.3)',
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '16px' }}>
-              <div style={{ width: '36px', height: '36px', borderRadius: '50%', backgroundColor: '#FCE8E6', color: '#C5221F', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                <XCircle size={20} />
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: '17px', color: 'var(--text-primary)' }}>
-                  Reject Evidence & Provide Feedback
-                </h3>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  File: <strong>{rejectionModal.item?.fileName}</strong> | Client: <strong>{rejectionModal.item?.client}</strong>
-                </span>
-              </div>
-            </div>
-
-            <div style={{ marginBottom: '20px' }}>
-              <label style={{ display: 'block', fontSize: '13px', fontWeight: '600', marginBottom: '6px', color: 'var(--text-primary)' }}>
-                Rejection Reason / Client Feedback <span style={{ color: '#C5221F' }}>*</span>
-              </label>
-              <textarea
-                value={rejectionModal.feedback}
-                onChange={(e) => setRejectionModal({ ...rejectionModal, feedback: e.target.value })}
-                placeholder="Explain why this evidence is being rejected so the client can re-upload..."
-                rows={4}
-                style={{
-                  width: '100%',
-                  padding: '10px',
-                  borderRadius: '6px',
-                  border: '1px solid var(--border-color)',
-                  fontSize: '13px',
-                  fontFamily: 'inherit',
-                  resize: 'vertical',
-                  boxSizing: 'border-box'
-                }}
-              />
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '10px' }}>
-              <button
-                className="btn btn-outline"
-                onClick={() => setRejectionModal(null)}
-              >
-                Cancel
-              </button>
-              <button
-                className="btn btn-primary"
-                style={{ backgroundColor: '#C5221F', borderColor: '#C5221F', display: 'flex', alignItems: 'center', gap: '6px' }}
-                onClick={async () => {
-                  await updateEvidenceStatus(rejectionModal.item.id, 'Rejected', rejectionModal.feedback);
-                  setRejectionModal(null);
-                }}
-              >
-                <Save size={14} /> Save & Reject
               </button>
             </div>
           </div>

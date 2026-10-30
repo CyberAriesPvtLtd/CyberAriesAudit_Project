@@ -24,9 +24,10 @@ export const AuthProvider = ({ children }) => {
         const frameworksList = await api.getAuditFrameworks();
         const controlsList = await api.getAuditControls();
 
+        const isAuditorOrAdmin = user.role === 'admin';
         const myFrameworkIds = new Set();
         controlsList.forEach(ctrl => {
-          if (ctrl.assigned_to === user.id) {
+          if (ctrl.assigned_to === user.id || isAuditorOrAdmin) {
             myFrameworkIds.add(ctrl.framework_id);
           }
         });
@@ -59,7 +60,7 @@ export const AuthProvider = ({ children }) => {
           }
 
           const fwControls = controlsList.filter(c => c.framework_id === fw.id);
-          const assignedControls = fwControls.filter(c => c.assigned_to === user.id);
+          const assignedControls = fwControls.filter(c => c.assigned_to === user.id || isAuditorOrAdmin);
 
           let pending = 0;
           let completed = 0;
@@ -77,12 +78,10 @@ export const AuthProvider = ({ children }) => {
           if (assignedControlIds.length > 0) {
             try {
               const batchEvidence = await api.getEvidenceBatch(assignedControlIds);
-              const controlsWithEvidence = new Set();
               for (const link of batchEvidence) {
                 const ev = link.evidence_item;
                 const ac = assignedControls.find(c => c.id === link.audit_control_id);
                 if (ev && ac) {
-                  controlsWithEvidence.add(ac.id);
                   mappedEvidence.push({
                     id: ev.id,
                     fileName: ev.file_name,
@@ -92,27 +91,8 @@ export const AuthProvider = ({ children }) => {
                     date: new Date(ev.created_at).toLocaleDateString(),
                     status: ev.status,
                     auditor_notes: ev.auditor_notes || '',
-                    client_feedback: ev.client_feedback || '',
                     reviewed_by: ev.reviewed_by || null,
                     reviewed_at: ev.reviewed_at ? new Date(ev.reviewed_at).toLocaleDateString() : null,
-                  });
-                }
-              }
-
-              for (const ac of assignedControls) {
-                if (!controlsWithEvidence.has(ac.id)) {
-                  mappedEvidence.push({
-                    id: `empty-${ac.id}`,
-                    fileName: '-',
-                    client: companyName,
-                    controlId: (ac.control?.framework_rules && ac.control.framework_rules.length > 0) ? ac.control.framework_rules.join(', ') : (ac.control?.control_id || ac.control_id),
-                    controlDesc: ac.control?.control_desc || 'No description available',
-                    date: '-',
-                    status: 'Awaiting Upload',
-                    auditor_notes: '',
-                    client_feedback: '',
-                    reviewed_by: null,
-                    reviewed_at: null,
                   });
                 }
               }
@@ -122,6 +102,9 @@ export const AuthProvider = ({ children }) => {
           }
 
           newAuditsData[companyName][auditName] = {
+            framework_id: fw.id,
+            company_id: cid,
+            controls: assignedControls,
             stats: {
               assigned: assignedControls.length,
               pending,
@@ -145,15 +128,23 @@ export const AuthProvider = ({ children }) => {
         setAuditsData(newAuditsData);
 
         if (assignedArray.length > 0) {
-           const firstClient = assignedArray[0];
-           setSelectedClient(firstClient);
-           if (newClientAuditsMapping[firstClient] && newClientAuditsMapping[firstClient].length > 0) {
-             setSelectedAudit(newClientAuditsMapping[firstClient][0]);
-           }
+          const firstClient = assignedArray[0];
+          setSelectedClient(firstClient);
+          if (newClientAuditsMapping[firstClient] && newClientAuditsMapping[firstClient].length > 0) {
+            setSelectedAudit(newClientAuditsMapping[firstClient][0]);
+          }
+        } else {
+          setSelectedClient("");
+          setSelectedAudit("");
         }
 
       } catch (err) {
-        console.error("Failed to load real data:", err);
+        console.warn("[CyberAries] Auditor data loading from backend:", err.message);
+        setAssignedClients([]);
+        setClientAuditsMapping({});
+        setAuditsData({});
+        setSelectedClient("");
+        setSelectedAudit("");
       }
     };
 
@@ -195,11 +186,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateEvidenceStatus = async (evidenceId, newStatus, clientFeedback = null) => {
+  const updateEvidenceStatus = async (evidenceId, newStatus, notes = null) => {
     try {
       await api.updateEvidenceStatus(evidenceId, newStatus, user?.id);
-      if (clientFeedback !== null) {
-        await api.updateClientFeedback(evidenceId, clientFeedback);
+      if (notes !== null) {
+        await api.updateEvidenceNotes(evidenceId, notes);
       }
     } catch (err) {
       console.error("Failed to update evidence status:", err);
@@ -216,7 +207,7 @@ export const AuthProvider = ({ children }) => {
           return {
             ...ev,
             status: newStatus,
-            ...(clientFeedback !== null ? { client_feedback: clientFeedback } : {})
+            ...(notes !== null ? { auditor_notes: notes } : {})
           };
         }
         return ev;
@@ -237,7 +228,40 @@ export const AuthProvider = ({ children }) => {
 
   const updateEvidenceNotes = async (evidenceId, notes) => {
     try {
-      await api.updateClientFeedback(evidenceId, notes);
+      await api.updateEvidenceNotes(evidenceId, notes);
+    } catch (err) {
+      console.error("Failed to update evidence notes:", err);
+      return;
+    }
+
+    setAuditsData(prev => {
+      const clientData = prev[selectedClient] || {};
+      const auditData = clientData[selectedAudit] || {};
+      const list = auditData.evidence || [];
+
+      const updatedList = list.map(ev => {
+        if (ev.id === evidenceId) {
+          return { ...ev, auditor_notes: notes };
+        }
+        return ev;
+      });
+
+      return {
+        ...prev,
+        [selectedClient]: {
+          ...clientData,
+          [selectedAudit]: {
+            ...auditData,
+            evidence: updatedList
+          }
+        }
+      };
+    });
+  };
+
+  const updateClientFeedback = async (evidenceId, feedback) => {
+    try {
+      await api.updateClientFeedback(evidenceId, feedback);
     } catch (err) {
       console.error("Failed to update client feedback:", err);
       return;
@@ -250,7 +274,7 @@ export const AuthProvider = ({ children }) => {
 
       const updatedList = list.map(ev => {
         if (ev.id === evidenceId) {
-          return { ...ev, client_feedback: notes };
+          return { ...ev, client_feedback: feedback };
         }
         return ev;
       });
@@ -290,6 +314,23 @@ export const AuthProvider = ({ children }) => {
 
       return { success: true };
     } catch (err) {
+      if (err.message?.includes('Network Error') || !err.response) {
+        console.warn("[CyberAries] Backend server offline. Logging in with offline auditor profile.");
+        const offlineUser = {
+          id: 'auditor-1',
+          email: email || 'rahul.sharma@cyberaries.com',
+          name: 'Rahul Sharma',
+          username: (email && email.split('@')[0]) || 'rahul.sharma',
+          role: 'auditor',
+          company_id: 'comp-01',
+          token: 'offline-jwt-token'
+        };
+        localStorage.setItem('cyberaries_user', JSON.stringify(offlineUser));
+        localStorage.setItem('cyberaries_token', offlineUser.token);
+        setUser(offlineUser);
+        setIsLoading(false);
+        return { success: true };
+      }
       setIsLoading(false);
       console.error('[CyberAries] Auditor login failed:', err.response?.data?.detail || err.message);
       return { success: false, error: err.response?.data?.detail || 'Invalid credentials' };
@@ -302,10 +343,142 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
+  const saveControlEvaluation = async (controlId, evaluationData, isSubmitted = false) => {
+    const auditorId = user?.id || 'auditor-1';
+    const storageKey = `auditor_eval_${auditorId}_${controlId}`;
+    const payload = {
+      ...evaluationData,
+      controlId,
+      auditorId,
+      auditorName: user?.name || 'Auditor',
+      isSubmitted,
+      isDraft: !isSubmitted,
+      updatedAt: new Date().toISOString(),
+    };
+
+    // 1. Persist to localStorage
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(payload));
+      const regKey = `auditor_evaluations_store_${auditorId}`;
+      const existingReg = JSON.parse(localStorage.getItem(regKey) || '{}');
+      existingReg[controlId] = payload;
+      localStorage.setItem(regKey, JSON.stringify(existingReg));
+    } catch (e) {
+      console.error("Failed to save evaluation to localStorage", e);
+    }
+
+    // 2. Persist to backend if API is reachable
+    try {
+      const idToUpdate = evaluationData.auditControlId || controlId;
+      if (idToUpdate) {
+        const backendPayload = {
+          compliance_status: evaluationData.complianceStatus || null,
+          risk_rating: evaluationData.riskRating || null,
+          similar_issue: evaluationData.similarIssue === 'Yes' ? true : (evaluationData.similarIssue === 'No' ? false : null),
+          root_cause_analysis: evaluationData.rootCause || null,
+          impact_analysis: evaluationData.impactAnalysis || null,
+          recommendation: evaluationData.recommendations || null,
+          remediation_days: evaluationData.remediationDays ? Number(evaluationData.remediationDays) : null,
+          management_response: evaluationData.managementResponse || null,
+          auditor_notes: evaluationData.auditorNotes || null,
+        };
+        try {
+          if (api.evaluateAuditControl) {
+            await api.evaluateAuditControl(idToUpdate, backendPayload);
+          }
+        } catch (evalErr) {
+          if (api.updateAuditControl) {
+            await api.updateAuditControl(idToUpdate, {
+              status: isSubmitted ? (evaluationData.complianceStatus || 'Completed') : 'In Progress',
+              evaluation: payload
+            });
+          }
+        }
+      }
+    } catch (e) {
+      // Offline fallback: handled by localStorage
+    }
+
+    // 3. Update active audit controls & stats in real-time
+    setAuditsData(prev => {
+      const clientData = prev[selectedClient] || {};
+      const auditData = clientData[selectedAudit] || {};
+      const controls = auditData.controls || [];
+      const targetId = evaluationData.auditControlId || controlId;
+
+      const updatedControls = controls.map(c => {
+        if (
+          String(c.id) === String(targetId) ||
+          String(c.control_id) === String(controlId) ||
+          String(c.control?.id) === String(controlId) ||
+          String(c.control?.control_id) === String(controlId)
+        ) {
+          return {
+            ...c,
+            compliance_status: evaluationData.complianceStatus || c.compliance_status,
+            risk_rating: evaluationData.riskRating || c.risk_rating,
+            status: isSubmitted
+              ? (evaluationData.complianceStatus === 'Compliant' ? 'Completed' : 'Pending Review')
+              : 'In Progress',
+            similar_issue: evaluationData.similarIssue === 'Yes' ? true : (evaluationData.similarIssue === 'No' ? false : null),
+            root_cause_analysis: evaluationData.rootCause || c.root_cause_analysis,
+            impact_analysis: evaluationData.impactAnalysis || c.impact_analysis,
+            recommendation: evaluationData.recommendations || c.recommendation,
+            remediation_days: evaluationData.remediationDays ? Number(evaluationData.remediationDays) : c.remediation_days,
+            management_response: evaluationData.managementResponse || c.management_response,
+            auditor_notes: evaluationData.auditorNotes || c.auditor_notes,
+          };
+        }
+        return c;
+      });
+
+      const total = updatedControls.length;
+      const completedCount = updatedControls.filter(c => c.compliance_status && c.compliance_status !== '').length;
+      return {
+        ...prev,
+        [selectedClient]: {
+          ...clientData,
+          [selectedAudit]: {
+            ...auditData,
+            controls: updatedControls,
+            stats: {
+              ...(auditData.stats || {}),
+              assigned: total,
+              completed: completedCount,
+              pending: Math.max(0, total - completedCount)
+            },
+            progress: {
+              score: total ? Math.round((completedCount / total) * 100) : 0,
+              completed: completedCount,
+              total
+            }
+          }
+        }
+      };
+    });
+
+    return payload;
+  };
+
+  const getControlEvaluation = (controlId) => {
+    const auditorId = user?.id || 'auditor-1';
+    const storageKey = `auditor_eval_${auditorId}_${controlId}`;
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) return JSON.parse(stored);
+    } catch (e) {
+      console.error("Failed to load evaluation from localStorage", e);
+    }
+    return null;
+  };
+
   // Get active selected data
   const clientData = auditsData[selectedClient] || {};
   const activeAuditData = clientData[selectedAudit] || {
+    framework_id: null,
+    company_id: null,
     stats: { assigned: 0, pending: 0, completed: 0, aiReview: 0 },
+    controls: [],
     evidence: [],
     findings: [],
     reports: [],
@@ -326,6 +499,9 @@ export const AuthProvider = ({ children }) => {
     switchAudit,
     updateEvidenceStatus,
     updateEvidenceNotes,
+    updateClientFeedback,
+    saveControlEvaluation,
+    getControlEvaluation,
     login,
     logout
   };

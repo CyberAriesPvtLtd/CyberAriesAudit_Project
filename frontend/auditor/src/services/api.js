@@ -124,6 +124,24 @@ export const updateEvidenceStatus = async (evidenceItemId, status, userId) => {
 };
 
 /*
+ * Audit Control Endpoints
+ */
+export const getAuditControlById = async (auditControlId) => {
+  const { data } = await axiosClient.get(`/audit-control/${auditControlId}`);
+  return data;
+};
+
+export const updateAuditControl = async (id, updates) => {
+  const { data } = await axiosClient.put(`/audit-control/${id}`, updates);
+  return data;
+};
+
+export const getAuditControlsByFramework = async (frameworkId) => {
+  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
+  return data;
+};
+
+/*
  * Control Evaluation — updates compliance status, risk, and non-compliance observations.
  * PATCH /audit-control/{audit_control_id}/evaluate
  */
@@ -132,16 +150,6 @@ export const evaluateAuditControl = async (auditControlId, evaluationData) => {
     `/audit-control/${auditControlId}/evaluate`,
     evaluationData
   );
-  return data;
-};
-
-export const getAuditControlById = async (auditControlId) => {
-  const { data } = await axiosClient.get(`/audit-control/${auditControlId}`);
-  return data;
-};
-
-export const getAuditControlsByFramework = async (frameworkId) => {
-  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
   return data;
 };
 
@@ -154,6 +162,7 @@ const api = {
   getCompanies,
   getAuditControls,
   getAuditControlById,
+  updateAuditControl,
   getAuditControlsByFramework,
   evaluateAuditControl,
   getEvidenceByCompany,

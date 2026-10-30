@@ -1,4 +1,5 @@
 import React from 'react';
+import { Link } from 'react-router-dom';
 import { Cpu, AlertTriangle, ShieldCheck, CheckCircle, Info } from 'lucide-react';
 import ExcelTable from '../components/ExcelTable';
 import { useAuth } from '../context/AuthContext';
@@ -19,9 +20,15 @@ const AIFindings = () => {
       header: 'Control ID',
       accessor: 'controlId',
       cell: (row) => (
-        <code style={{ fontSize: '12px', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace', fontWeight: 700 }}>
-          {row.controlId}
-        </code>
+        <Link
+          to={`/control-details/${encodeURIComponent(row.controlId)}`}
+          title="Click to view control details & evaluation"
+          style={{ textDecoration: 'none' }}
+        >
+          <code style={{ fontSize: '12px', background: 'var(--bg-main)', padding: '2px 6px', borderRadius: '4px', fontFamily: 'monospace', fontWeight: 700, cursor: 'pointer', color: 'var(--primary)' }}>
+            {row.controlId}
+          </code>
+        </Link>
       )
     },
     { header: 'Control Name', accessor: 'controlName' },
@@ -29,12 +36,11 @@ const AIFindings = () => {
       header: 'AI Risk Rating',
       accessor: 'risk',
       cell: (row) => (
-        <span 
-          className={`badge ${
-            row.risk === 'High' ? 'badge-action-required' : 
-            row.risk === 'Medium' ? 'badge-pending' : 
-            'badge-completed'
-          }`}
+        <span
+          className={`badge ${row.risk === 'High' ? 'badge-action-required' :
+              row.risk === 'Medium' ? 'badge-pending' :
+                'badge-completed'
+            }`}
           style={{ fontSize: '11px', fontWeight: '700' }}
         >
           {row.risk} Risk
@@ -115,7 +121,7 @@ const AIFindings = () => {
       </div>
 
       {/* ExcelTable */}
-      <ExcelTable 
+      <ExcelTable
         columns={columns}
         data={findingsList}
         searchPlaceholder="Search AI findings..."
