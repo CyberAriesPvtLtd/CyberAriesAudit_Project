@@ -14,14 +14,7 @@ import { initialFrameworkRules } from '../data/frameworkRulesData';
 
 const initialRulebook = initialFrameworkRules;
 
-const initialActivities = [
-  { id: 'ACT-001', user: 'System', type: 'System', message: 'Automated compliance score recalculation completed successfully.', timestamp: '2026-07-09T14:45:00Z' },
-  { id: 'ACT-002', user: 'Admin User', type: 'Audit', message: 'Assigned audit AUDIT-103 to auditor Christian Wolff.', timestamp: '2026-07-09T12:30:00Z' },
-  { id: 'ACT-003', user: 'Dr. Evelyn Foster', type: 'Document', message: 'Uploaded CSCRF PR Evidence file: "Aether_Access_Review_Q2.pdf".', timestamp: '2026-07-09T10:15:00Z' },
-  { id: 'ACT-004', user: 'Admin User', type: 'Company', message: 'Registered new company Apex Financial Services.', timestamp: '2026-07-08T16:20:00Z' },
-  { id: 'ACT-005', user: 'System', type: 'Security', message: 'Successful login detected for user admin@cyberaries.com from IP 192.168.1.42.', timestamp: '2026-07-08T09:00:00Z' },
-  { id: 'ACT-006', user: 'Christian Wolff', type: 'Audit', message: 'Marked audit AUDIT-104 (Nova Logistics Corp) as Completed.', timestamp: '2026-07-07T17:45:00Z' },
-];
+const initialActivities = [];
 
 export const AppProvider = ({ children }) => {
   const [currentUser, setCurrentUser] = useState(() => {

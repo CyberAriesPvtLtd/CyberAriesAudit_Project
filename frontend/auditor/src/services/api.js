@@ -100,6 +100,18 @@ export const updateEvidenceNotes = async (evidenceItemId, auditor_notes) => {
 };
 
 /*
+ * Client Feedback — updates evidence_files.client_feedback via the
+ * PUT /evidence-files/{evidence_item_id}/client-feedback endpoint.
+ */
+export const updateClientFeedback = async (evidenceItemId, client_feedback) => {
+  const { data } = await axiosClient.put(
+    `/evidence-files/${evidenceItemId}/client-feedback`,
+    { client_feedback }
+  );
+  return data;
+};
+
+/*
  * Evidence Status — updates evidence_files.status via the existing
  * PUT /evidence-files/{evidence_item_id} endpoint.
  */
@@ -107,6 +119,48 @@ export const updateEvidenceStatus = async (evidenceItemId, status, userId) => {
   const { data } = await axiosClient.put(
     `/evidence-files/${evidenceItemId}`,
     { status, reviewed_by: userId }
+  );
+  return data;
+};
+
+/*
+ * Audit Control Endpoints
+ */
+export const getAuditControlById = async (auditControlId) => {
+  const { data } = await axiosClient.get(`/audit-control/${auditControlId}`);
+  return data;
+};
+
+export const updateAuditControl = async (id, updates) => {
+  const { data } = await axiosClient.put(`/audit-control/${id}`, updates);
+  return data;
+};
+
+export const getAuditControlsByFramework = async (frameworkId) => {
+  const { data } = await axiosClient.get(`/audit-control/framework/${frameworkId}`);
+  return data;
+};
+
+/*
+ * Control Evaluation — updates compliance status, risk, and non-compliance observations.
+ * PATCH /audit-control/{audit_control_id}/evaluate
+ */
+export const evaluateAuditControl = async (auditControlId, evaluationData) => {
+  const { data } = await axiosClient.patch(
+    `/audit-control/${auditControlId}/evaluate`,
+    evaluationData
+  );
+  return data;
+};
+
+/*
+ * AI Synthesize — generates standardized executive report note & non-compliance observations.
+ * POST /audit-control/{audit_control_id}/ai-synthesize
+ */
+export const aiSynthesizeControl = async (auditControlId, { raw_note = '', compliance_status = 'Non-Compliant' } = {}) => {
+  const { data } = await axiosClient.post(
+    `/audit-control/${auditControlId}/ai-synthesize`,
+    { raw_note, compliance_status }
   );
   return data;
 };
@@ -119,11 +173,17 @@ const api = {
   getAuditFrameworks,
   getCompanies,
   getAuditControls,
+  getAuditControlById,
+  updateAuditControl,
+  getAuditControlsByFramework,
+  evaluateAuditControl,
+  aiSynthesizeControl,
   getEvidenceByCompany,
   getEvidenceForAuditControl,
   getEvidenceBatch,
   getEvidenceDownloadUrl,
   updateEvidenceNotes,
+  updateClientFeedback,
   updateEvidenceStatus,
 };
 

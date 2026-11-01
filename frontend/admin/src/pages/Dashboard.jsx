@@ -8,7 +8,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
 
   const totalClients = clients.length;
-  const uniqueFrameworks = 9;
+  const uniqueFrameworks = new Set(rulebook.map(r => r.frameworkType)).size;
   const totalAssignedAudits = audits.length;
   const activeAuditorsCount = auditors.filter(a => a.status === 'Active').length;
 
@@ -18,12 +18,7 @@ export default function Dashboard() {
   const recentClients = clients.slice(0, 3);
   const recentLogs = activities.slice(0, 5);
 
-  const mockDocuments = [
-    { name: 'CSCRF_Protect_System_Description_v2.pdf', size: '2.4 MB', uploadedBy: 'Sarah Connor', date: '2026-07-09' },
-    { name: 'CSCRF_Govern_Statement_Of_Applicability.xlsx', size: '412 KB', uploadedBy: 'Christian Wolff', date: '2026-07-08' },
-    { name: 'CSCRF_Risk_Assessment_Report_2026.pdf', size: '5.1 MB', uploadedBy: 'Jane Goodall', date: '2026-07-05' },
-    { name: 'CSCRF_Access_Control_Policy_Signed.pdf', size: '890 KB', uploadedBy: 'Admin User', date: '2026-07-02' },
-  ];
+  const mockDocuments = [];
 
   return (
     <div className="page-container">
@@ -56,7 +51,7 @@ export default function Dashboard() {
 
         <div className="metric-card" style={{ borderLeft: '4px solid var(--primary)' }}>
           <div className="metric-content">
-            <span className="metric-label">Total Audits</span>
+            <span className="metric-label">Available Frameworks</span>
             <span className="metric-value">{uniqueFrameworks}</span>
           </div>
           <div className="metric-icon-wrapper" style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)' }}>
@@ -225,29 +220,35 @@ export default function Dashboard() {
             </div>
             <div style={{ padding: '16px 20px' }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
-                {mockDocuments.map((doc, idx) => (
-                  <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: idx < mockDocuments.length - 1 ? '1px solid #F1F5F9' : 'none', paddingBottom: '10px' }}>
-                    <div style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '8px', borderRadius: '6px' }}>
-                      <FileText size={18} />
-                    </div>
-                    <div style={{ flexGrow: 1, minWidth: 0 }}>
-                      <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {doc.name}
-                      </div>
-                      <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '8px' }}>
-                        <span>{doc.size}</span>
-                        <span>•</span>
-                        <span>{doc.uploadedBy}</span>
-                      </div>
-                    </div>
-                    <button 
-                      onClick={() => alert(`Downloading: ${doc.name}`)}
-                      style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '11px', textDecoration: 'underline' }}
-                    >
-                      Retrieve
-                    </button>
+                {mockDocuments.length === 0 ? (
+                  <div style={{ textAlign: 'center', color: 'var(--text-muted)', padding: '20px 0' }}>
+                    No recent documents uploaded.
                   </div>
-                ))}
+                ) : (
+                  mockDocuments.map((doc, idx) => (
+                    <div key={idx} style={{ display: 'flex', alignItems: 'center', gap: '12px', borderBottom: idx < mockDocuments.length - 1 ? '1px solid #F1F5F9' : 'none', paddingBottom: '10px' }}>
+                      <div style={{ backgroundColor: 'var(--primary-light)', color: 'var(--primary)', padding: '8px', borderRadius: '6px' }}>
+                        <FileText size={18} />
+                      </div>
+                      <div style={{ flexGrow: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: '13px', fontWeight: '600', color: 'var(--text-primary)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {doc.name}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', gap: '8px' }}>
+                          <span>{doc.size}</span>
+                          <span>•</span>
+                          <span>{doc.uploadedBy}</span>
+                        </div>
+                      </div>
+                      <button 
+                        onClick={() => alert(`Downloading: ${doc.name}`)}
+                        style={{ background: 'none', border: 'none', color: 'var(--text-secondary)', cursor: 'pointer', fontSize: '11px', textDecoration: 'underline' }}
+                      >
+                        Retrieve
+                      </button>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
           </div>
@@ -279,17 +280,7 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Compliance Alerts Panel */}
-          <div className="dashboard-section-card" style={{ borderLeft: '4px solid var(--primary)', backgroundColor: 'var(--primary-light)' }}>
-            <div style={{ padding: '16px 20px' }}>
-              <h4 style={{ color: 'var(--primary)', fontSize: '14px', fontWeight: '700', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <ShieldAlert size={16} /> Compliance Operations Warning
-              </h4>
-              <p style={{ fontSize: '12.5px', color: 'var(--text-primary)', lineHeight: '1.4' }}>
-                Quantum Retail (COM-005) is currently marked <span style={{ fontWeight: '700' }}>Non-Compliant</span> due to CSCRF assessment delays. Action is required within 3 days.
-              </p>
-            </div>
-          </div>
+          {/* Compliance Alerts Panel (Hidden for now until backend support is added) */}
         </div>
       </div>
     </div>

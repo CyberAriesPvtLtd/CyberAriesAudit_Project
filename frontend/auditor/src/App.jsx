@@ -9,6 +9,7 @@ import AssignedAudits from './pages/AssignedAudits';
 import FrameworkManagement from './pages/FrameworkManagement';
 import EvidenceReview from './pages/EvidenceReview';
 import AuditReview from './pages/AuditReview';
+import ControlDetails from './pages/ControlDetails';
 import AIFindings from './pages/AIFindings';
 import DraftReports from './pages/DraftReports';
 import AuditProgress from './pages/AuditProgress';
@@ -37,8 +38,13 @@ function App() {
                     <Route path="/framework-management" element={<FrameworkManagement />} />
                     <Route path="/framework" element={<FrameworkManagement />} />
                     <Route path="/rulebook" element={<FrameworkManagement />} />
+                    <Route path="/controls" element={<FrameworkManagement />} />
+                    <Route path="/control-details/:controlId" element={<ControlDetails />} />
+                    <Route path="/control-details" element={<ControlDetails />} />
+                    <Route path="/control/:controlId" element={<ControlDetails />} />
                     <Route path="/evidence-review" element={<EvidenceReview />} />
-                    <Route path="/audit-review/:auditId" element={<AuditReview />} />
+                    <Route path="/audit-review/:auditId" element={<ControlDetails />} />
+                    <Route path="/audit-review/:auditId/:controlId" element={<ControlDetails />} />
                     <Route path="/ai-findings" element={<AIFindings />} />
                     <Route path="/draft-reports" element={<DraftReports />} />
                     <Route path="/audit-progress" element={<AuditProgress />} />

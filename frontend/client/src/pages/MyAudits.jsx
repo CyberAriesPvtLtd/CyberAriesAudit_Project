@@ -101,7 +101,7 @@ export default function MyAudits() {
 
         {/* Audits Card Grid */}
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '24px' }}>
-          {clientAudits.map(auditObj => {
+          {[...clientAudits].sort((a, b) => b.id - a.id).map(auditObj => {
             const stats = getAuditStats(auditObj);
             
             return (

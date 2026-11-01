@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import ExcelTable from '../components/ExcelTable';
@@ -59,6 +59,29 @@ export default function AuditManagement() {
 
   const [isEditAuditorsDropdownOpen, setIsEditAuditorsDropdownOpen] = useState(false);
   const [isCreatingAudit, setIsCreatingAudit] = useState(false);
+
+  // Dropdown closing logic
+  const companyDropdownRef = useRef(null);
+  const auditorsDropdownRef = useRef(null);
+  const editAuditorsDropdownRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(event) {
+      if (companyDropdownRef.current && !companyDropdownRef.current.contains(event.target)) {
+        setIsCompanyDropdownOpen(false);
+      }
+      if (auditorsDropdownRef.current && !auditorsDropdownRef.current.contains(event.target)) {
+        setIsAuditorsDropdownOpen(false);
+      }
+      if (editAuditorsDropdownRef.current && !editAuditorsDropdownRef.current.contains(event.target)) {
+        setIsEditAuditorsDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   // Form states
   const [createForm, setCreateForm] = useState({
@@ -337,7 +360,7 @@ export default function AuditManagement() {
           </div>
 
           {/* 2. Company Name - Searchable Dropdown */}
-          <div className="form-group" style={{ position: 'relative' }}>
+          <div className="form-group" style={{ position: 'relative' }} ref={companyDropdownRef}>
             <label className="form-label">Company Name</label>
             <div
               className="multi-select-box"
@@ -390,7 +413,7 @@ export default function AuditManagement() {
           </div>
 
           {/* 3. Auditors Assigned - Multi-Select Dropdown with Chips */}
-          <div className="form-group" style={{ position: 'relative' }}>
+          <div className="form-group" style={{ position: 'relative' }} ref={auditorsDropdownRef}>
             <label className="form-label">Auditors Assigned</label>
             <div
               className={`multi-select-box ${isAuditorsDropdownOpen ? 'focused' : ''}`}
@@ -595,7 +618,7 @@ export default function AuditManagement() {
               </select>
             </div>
 
-            <div className="form-group" style={{ position: 'relative' }}>
+            <div className="form-group" style={{ position: 'relative' }} ref={editAuditorsDropdownRef}>
               <label className="form-label">Assigned Auditors</label>
               <div 
                 className="form-input multi-select-display"

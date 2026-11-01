@@ -31,6 +31,7 @@ export default function ControlDetails() {
       uploadedBy: file.uploadedBy,
       status: file.status || 'Pending Review',
       auditorNotes: file.auditorNotes || file.auditor_notes || '',
+      clientFeedback: file.clientFeedback || file.client_feedback || '',
       requirement: requirements[idx] || 'Deliverable',
       evidenceItemId: file.evidenceItemId,
     }));
@@ -454,7 +455,7 @@ export default function ControlDetails() {
                                       Evidence Rejected by Auditor
                                     </div>
                                     <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                                      <strong>Auditor Feedback:</strong> {file.auditorNotes || 'Auditor rejected this evidence. Please re-upload corrected documentation.'}
+                                      <strong>Auditor Feedback:</strong> {file.clientFeedback || 'Auditor rejected this evidence. Please re-upload corrected documentation.'}
                                     </div>
                                   </div>
                                 </div>
