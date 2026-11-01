@@ -26,7 +26,9 @@ import {
   Sparkles,
   AlertCircle,
   ClipboardList,
-  FileCode
+  FileCode,
+  RotateCcw,
+  Loader2
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { initialFrameworkRules } from '../data/frameworkRulesData';
@@ -195,6 +197,8 @@ export default function ControlDetails() {
 
   // Validation errors state
   const [validationErrors, setValidationErrors] = useState({});
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [previousDraftNote, setPreviousDraftNote] = useState(null);
 
   // ─── Step 1: Load Master Control Information ───────────────────────
   useEffect(() => {
@@ -560,6 +564,63 @@ export default function ControlDetails() {
     showToast(`Downloading: ${ev.fileName}`, 'success');
   };
 
+  // ─── AI Copilot Synthesis Handlers ────────────────────────────────
+  const handleTriggerAISynthesis = async () => {
+    const targetACId = auditControlRecord?.id || (resolvedControlId && String(resolvedControlId).length > 10 ? resolvedControlId : null);
+    if (!targetACId) {
+      showToast('No active audit control record found to synthesize.', 'error');
+      return;
+    }
+
+    try {
+      setIsSynthesizing(true);
+      setPreviousDraftNote(evaluation.auditorNotes || '');
+
+      const currentStatus = evaluation.complianceStatus || 'Non-Compliant';
+      const result = await api.aiSynthesizeControl(targetACId, {
+        raw_note: evaluation.auditorNotes || '',
+        compliance_status: currentStatus,
+      });
+
+      if (result && result.success) {
+        setEvaluation(prev => ({
+          ...prev,
+          auditorNotes: result.report_note || prev.auditorNotes,
+          ...(result.root_cause_analysis ? { rootCause: result.root_cause_analysis } : {}),
+          ...(result.impact_analysis ? { impactAnalysis: result.impact_analysis } : {}),
+          ...(result.recommendation ? { recommendations: result.recommendation } : {}),
+          ...(result.remediation_days ? { remediationDays: String(result.remediation_days) } : {}),
+        }));
+
+        showToast(
+          result.is_mock
+            ? '✨ Standardized SEBI observation & observations generated!'
+            : '✨ AI synthesized professional observation & findings!',
+          'success'
+        );
+      }
+    } catch (err) {
+      console.error('AI Synthesis error:', err);
+      showToast(
+        err.response?.data?.detail || 'Failed to synthesize observations with AI. Please check server.',
+        'error'
+      );
+    } finally {
+      setIsSynthesizing(false);
+    }
+  };
+
+  const handleUndoAISynthesis = () => {
+    if (previousDraftNote !== null) {
+      setEvaluation(prev => ({
+        ...prev,
+        auditorNotes: previousDraftNote
+      }));
+      setPreviousDraftNote(null);
+      showToast('Reverted to previous note.', 'info');
+    }
+  };
+
   // ─── Adopt Overall Control AI Note into Report Notes Component ─────
   const handleAdoptOverallNoteToReport = (noteText) => {
     const textToSet = noteText || overallAITelemetry.overallReportNote;
@@ -909,10 +970,8 @@ export default function ControlDetails() {
         </div>
       </div>
 
-      {/* ─── SECTION B & C: Evidence Deliverables & AI Copilot Telemetry ─── */}
-      <div className="cd-two-col-grid">
-        {/* SECTION B: Evidence Deliverables & Verification */}
-        <div className="cd-section-card">
+      {/* ─── SECTION B: Evidence Deliverables & Verification (Full Width) ─── */}
+      <div className="cd-section-card" style={{ marginBottom: '24px' }}>
           <div className="cd-section-header">
             <h2 className="cd-section-title">
               <FileText className="cd-section-title-icon" size={20} /> Section B: Evidence Deliverables & Verification
@@ -1075,32 +1134,6 @@ export default function ControlDetails() {
                       </div>
                     </div>
 
-                    {/* Evidence-Specific AI Telemetry Row */}
-                    <div className="cd-evidence-ai-row">
-                      <div className="cd-evidence-ai-pill">
-                        <Cpu size={13} color="var(--primary)" />
-                        <span><strong>AI File Telemetry:</strong> {fileAITelemetry}</span>
-                      </div>
-                      <div style={{ display: 'flex', gap: '6px' }}>
-                        <button
-                          type="button"
-                          className="btn btn-secondary cd-btn-adopt-ai"
-                          onClick={() => handleAdoptEvidenceAINote(ev.id, fileAITelemetry)}
-                          title="Adopt this specific document analysis into the file's internal workpaper note"
-                        >
-                          <Sparkles size={12} /> Adopt File Note from AI
-                        </button>
-                        <button
-                          type="button"
-                          className="btn btn-secondary cd-btn-adopt-ai"
-                          onClick={() => handleAdoptEvidenceAIFeedback(ev.id, fileAITelemetry)}
-                          title="Use as Client Feedback instruction for re-upload"
-                        >
-                          Use as Client Feedback
-                        </button>
-                      </div>
-                    </div>
-
                     {/* Client Feedback Box (Sent to Client Dashboard) */}
                     <div className="cd-feedback-row">
                       <label className="cd-feedback-label">
@@ -1153,96 +1186,7 @@ export default function ControlDetails() {
           )}
         </div>
 
-        {/* SECTION C: AI Findings & Copilot Telemetry */}
-        <div className="cd-section-card">
-          <div className="cd-section-header">
-            <h2 className="cd-section-title">
-              <Cpu className="cd-section-title-icon" size={20} /> Section C: AI Copilot Findings & Telemetry
-            </h2>
-            <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Automated Telemetry</span>
-          </div>
-
-          <div className="cd-ai-analysis-box">
-            {/* Top Telemetry Row */}
-            <div className="cd-ai-top-row">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <span style={{
-                  padding: '3px 10px', borderRadius: '6px', fontSize: '11.5px', fontWeight: '700',
-                  backgroundColor: overallAITelemetry.risk === 'High' ? '#FCE8E6' : overallAITelemetry.risk === 'Medium' ? '#FEF7E0' : '#E6F4EA',
-                  color: overallAITelemetry.risk === 'High' ? '#C5221F' : overallAITelemetry.risk === 'Medium' ? '#B06000' : '#137333',
-                  border: `1px solid ${overallAITelemetry.risk === 'High' ? '#F5C2C7' : overallAITelemetry.risk === 'Medium' ? '#FDE293' : '#A8DAB5'}`
-                }}>
-                  {overallAITelemetry.risk} Risk Status
-                </span>
-                <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
-                  Analyzed against SEBI CSCRF
-                </span>
-              </div>
-
-              <div className="cd-ai-confidence-pill">
-                <Check size={13} /> Confidence Score: <strong>{overallAITelemetry.confidence}%</strong>
-              </div>
-            </div>
-
-            {/* 1. Overall Control Security Telemetry */}
-            <div>
-              <span className="cd-info-label" style={{ display: 'block', marginBottom: '6px' }}>
-                Overall Control Security Telemetry
-              </span>
-              <p style={{ fontSize: '13px', color: 'var(--text-primary)', lineHeight: '1.5', margin: 0 }}>
-                {overallAITelemetry.message}
-              </p>
-            </div>
-
-            <div>
-              <span className="cd-info-label" style={{ display: 'block', marginBottom: '6px' }}>
-                Reasoning / Regulatory Baseline
-              </span>
-              <div className="cd-ai-reasoning-card">
-                {overallAITelemetry.reasoning}
-              </div>
-            </div>
-
-            {/* 2. Executive Report Synthesis (Overall Control Note for Report) */}
-            <div style={{ backgroundColor: '#F8FAFC', padding: '12px', borderRadius: '6px', border: '1px solid #E2E8F0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-                <span style={{ fontSize: '12px', fontWeight: '700', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                  <ClipboardList size={14} /> Overall Control Report Synthesis (AI Proposed):
-                </span>
-                <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Fed into Executive Final Report</span>
-              </div>
-              <p style={{ fontSize: '12.5px', color: 'var(--text-primary)', lineHeight: '1.5', margin: '0 0 10px 0', fontStyle: 'italic' }}>
-                "{overallAITelemetry.overallReportNote}"
-              </p>
-
-              {/* Action Buttons: Adopt Report Note OR Adopt Observation */}
-              <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                <button
-                  type="button"
-                  className="btn btn-primary"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', padding: '6px 12px' }}
-                  onClick={() => handleAdoptOverallNoteToReport(overallAITelemetry.overallReportNote)}
-                  title="Adopt this overall synthesis note directly into the Executive Audit Report Notes component"
-                >
-                  <Sparkles size={13} /> Adopt AI Note into Report Notes
-                </button>
-
-                <button
-                  type="button"
-                  className="btn btn-outline"
-                  style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', fontSize: '11.5px', padding: '6px 12px' }}
-                  onClick={handleAdoptAIFindingToObservations}
-                  title="Adopt technical flaw findings into Non-Compliance Observations (Root Cause, Impact, Recommendations)"
-                >
-                  <FileCheck size={13} /> Adopt into Observations
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* ─── SECTION 3: Auditor Evaluation & Report Form ─────────────── */}
+{/* ─── SECTION 3: Auditor Evaluation & Report Form ─────────────── */}
       <div className="cd-eval-form-card" id="auditor-evaluation-form">
         <div className="cd-section-header">
           <div>
@@ -1356,15 +1300,37 @@ export default function ControlDetails() {
               </span>
             </div>
 
-            <button
-              type="button"
-              className="btn btn-outline"
-              style={{ fontSize: '11.5px', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
-              onClick={() => handleAdoptOverallNoteToReport(overallAITelemetry.overallReportNote)}
-              title="Adopt overall control note from Section C AI Copilot synthesis"
-            >
-              <Sparkles size={13} color="var(--primary)" /> Adopt from AI Synthesis
-            </button>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {previousDraftNote !== null && (
+                <button
+                  type="button"
+                  className="btn btn-secondary"
+                  style={{ fontSize: '11.5px', padding: '5px 10px', display: 'inline-flex', alignItems: 'center', gap: '4px' }}
+                  onClick={handleUndoAISynthesis}
+                  title="Undo AI generation and revert to your previous note"
+                >
+                  <RotateCcw size={12} /> Revert Note
+                </button>
+              )}
+              <button
+                type="button"
+                className="btn btn-primary"
+                style={{ fontSize: '12px', padding: '6px 14px', display: 'inline-flex', alignItems: 'center', gap: '6px', fontWeight: '600' }}
+                onClick={handleTriggerAISynthesis}
+                disabled={isSynthesizing}
+                title="Use AI to generate professional SEBI audit observations, root cause, impact, and recommendations from your notes"
+              >
+                {isSynthesizing ? (
+                  <>
+                    <Loader2 size={13} className="spin" /> Generating Observations...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles size={13} /> {evaluation.complianceStatus === 'Compliant' ? '✨ Enhance Report Note with AI' : '✨ Generate All Observations & Notes with AI'}
+                  </>
+                )}
+              </button>
+            </div>
           </div>
 
           <textarea
@@ -1380,9 +1346,20 @@ export default function ControlDetails() {
         {/* C. Non-Compliance Observations (Dynamically displayed when Partially Compliant or Non-Compliant) */}
         {isObservationsVisible && (
           <div className="cd-observations-wrapper">
-            <div className="cd-observations-banner">
-              <AlertTriangle size={18} />
-              <span>C. Non-Compliance Observations Required — Status set to {evaluation.complianceStatus}</span>
+            <div className="cd-observations-banner" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <AlertTriangle size={18} />
+                <span>C. Non-Compliance Observations Required — Status set to {evaluation.complianceStatus}</span>
+              </div>
+              <button
+                type="button"
+                className="btn btn-outline"
+                style={{ fontSize: '11px', padding: '4px 10px', display: 'inline-flex', alignItems: 'center', gap: '5px', background: '#FFFFFF', color: '#B06000', borderColor: '#FDE293' }}
+                onClick={handleTriggerAISynthesis}
+                disabled={isSynthesizing}
+              >
+                <Sparkles size={11} color="#B06000" /> {isSynthesizing ? 'Generating...' : 'Auto-Fill Observations with AI'}
+              </button>
             </div>
 
             <div className="cd-form-grid-2">

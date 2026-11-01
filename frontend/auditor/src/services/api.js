@@ -153,6 +153,18 @@ export const evaluateAuditControl = async (auditControlId, evaluationData) => {
   return data;
 };
 
+/*
+ * AI Synthesize — generates standardized executive report note & non-compliance observations.
+ * POST /audit-control/{audit_control_id}/ai-synthesize
+ */
+export const aiSynthesizeControl = async (auditControlId, { raw_note = '', compliance_status = 'Non-Compliant' } = {}) => {
+  const { data } = await axiosClient.post(
+    `/audit-control/${auditControlId}/ai-synthesize`,
+    { raw_note, compliance_status }
+  );
+  return data;
+};
+
 // Default export for convenience
 const api = {
   login,
@@ -165,6 +177,7 @@ const api = {
   updateAuditControl,
   getAuditControlsByFramework,
   evaluateAuditControl,
+  aiSynthesizeControl,
   getEvidenceByCompany,
   getEvidenceForAuditControl,
   getEvidenceBatch,
