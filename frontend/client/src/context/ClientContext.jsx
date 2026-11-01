@@ -145,7 +145,7 @@ export const ClientProvider = ({ children }) => {
                       uploadedBy: item.uploaded_by || 'Client',
                       status: item.status || 'Pending Review',
                       auditorNotes: item.auditor_notes || '',
-                      clientFeedback: item.client_feedback || '',
+                      clientFeedback: item.client_feedback || (item.status === 'Rejected' ? (item.auditor_notes || '') : ''),
                       evidenceItemId: item.id,
                       linkId: link.id, // the AuditControlEvidence link id
                     };

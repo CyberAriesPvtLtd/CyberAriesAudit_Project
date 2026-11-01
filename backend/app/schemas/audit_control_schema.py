@@ -35,6 +35,27 @@ class AuditControlEvaluate(BaseModel):
     remediation_days: Optional[int] = None
     management_response: Optional[str] = None
     auditor_notes: Optional[str] = None
+    ai_notes: Optional[str] = None
+
+
+class AISynthesizeRequest(BaseModel):
+    """Request payload to generate AI observation and report notes."""
+    raw_note: Optional[str] = ""
+    compliance_status: Optional[str] = "Non-Compliant"
+    refresh_count: Optional[int] = 0
+
+
+class AISynthesizeResponse(BaseModel):
+    """Standardized AI observation output for all-in-one adoption."""
+    success: bool
+    control_id: str
+    compliance_status: str
+    report_note: str
+    root_cause_analysis: Optional[str] = None
+    impact_analysis: Optional[str] = None
+    recommendation: Optional[str] = None
+    remediation_days: Optional[int] = None
+    is_mock: bool = False
 
 
 class AuditControlResponse(BaseModel):
@@ -42,6 +63,7 @@ class AuditControlResponse(BaseModel):
     status: str
     assigned_to: Optional[str] = None
     auditor_notes: Optional[str] = None
+    ai_notes: Optional[str] = None
     evaluated_at: Optional[datetime] = None
     framework_id: str
     control_id: str

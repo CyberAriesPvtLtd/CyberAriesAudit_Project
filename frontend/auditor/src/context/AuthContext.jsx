@@ -186,11 +186,11 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  const updateEvidenceStatus = async (evidenceId, newStatus, notes = null) => {
+  const updateEvidenceStatus = async (evidenceId, newStatus, clientFeedback = null) => {
     try {
-      await api.updateEvidenceStatus(evidenceId, newStatus, user?.id);
-      if (notes !== null) {
-        await api.updateEvidenceNotes(evidenceId, notes);
+      await api.updateEvidenceStatus(evidenceId, newStatus, user?.id, clientFeedback);
+      if (clientFeedback !== null && clientFeedback !== undefined && String(clientFeedback).trim() !== "") {
+        await api.updateClientFeedback(evidenceId, clientFeedback);
       }
     } catch (err) {
       console.error("Failed to update evidence status:", err);
@@ -207,7 +207,7 @@ export const AuthProvider = ({ children }) => {
           return {
             ...ev,
             status: newStatus,
-            ...(notes !== null ? { auditor_notes: notes } : {})
+            ...(clientFeedback !== null ? { client_feedback: clientFeedback } : {})
           };
         }
         return ev;

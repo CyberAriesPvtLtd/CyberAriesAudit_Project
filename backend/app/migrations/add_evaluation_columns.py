@@ -16,17 +16,18 @@ MIGRATION_STATEMENTS = [
     "ALTER TABLE controls ADD COLUMN IF NOT EXISTS cia_classification VARCHAR",
     "ALTER TABLE controls ADD COLUMN IF NOT EXISTS test_procedure VARCHAR",
 
-    # ── audit_control table: 3 dynamic evaluation columns ──
+    # ── audit_control table: dynamic evaluation columns ──
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS compliance_status VARCHAR",
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS risk_rating VARCHAR",
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS similar_issue BOOLEAN",
 
-    # ── audit_control table: 5 default-but-editable columns ──
+    # ── audit_control table: observation columns & AI notes ──
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS root_cause_analysis TEXT",
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS impact_analysis TEXT",
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS recommendation TEXT",
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS remediation_days INTEGER",
     "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS management_response TEXT",
+    "ALTER TABLE audit_control ADD COLUMN IF NOT EXISTS ai_notes TEXT",
 ]
 
 

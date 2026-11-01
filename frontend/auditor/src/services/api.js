@@ -115,10 +115,14 @@ export const updateClientFeedback = async (evidenceItemId, client_feedback) => {
  * Evidence Status — updates evidence_files.status via the existing
  * PUT /evidence-files/{evidence_item_id} endpoint.
  */
-export const updateEvidenceStatus = async (evidenceItemId, status, userId) => {
+export const updateEvidenceStatus = async (evidenceItemId, status, userId, client_feedback = null) => {
+  const payload = { status, reviewed_by: userId };
+  if (client_feedback !== null && client_feedback !== undefined) {
+    payload.client_feedback = client_feedback;
+  }
   const { data } = await axiosClient.put(
-    `/evidence-files/${evidenceItemId}`,
-    { status, reviewed_by: userId }
+    /evidence-files/,
+    payload
   );
   return data;
 };

@@ -134,7 +134,7 @@ def evaluate_audit_control(
     db: Session,
     audit_control_id: str,
     evaluation_data,
-    current_user
+    current_user = None
 ):
     """
     Auditor evaluates a control — sets compliance_status, risk_rating,
@@ -171,3 +171,55 @@ def evaluate_audit_control(
     db.refresh(audit_control)
 
     return audit_control
+
+
+def synthesize_control_ai(
+    db: Session,
+    audit_control_id: str,
+    raw_note: str,
+    compliance_status: str,
+    current_user = None
+):
+    audit_control = db.query(AuditControl).filter(
+        AuditControl.id == audit_control_id
+    ).options(joinedload(AuditControl.control)).first()
+
+    if not audit_control:
+        raise HTTPException(
+            status_code=404,
+            detail="Audit Control not found"
+        )
+
+    # In AI Copilot drafting assistance mode, generate findings for the control without blocking
+
+    control = audit_control.control
+    control_id = getattr(control, "control_id", "CONTROL") if control else "CONTROL"
+    control_name = getattr(control, "control_name", "Cybersecurity Control") if control else "Cybersecurity Control"
+    control_requirement = getattr(control, "control_desc", None) or getattr(control, "name", None) or "SEBI CSCRF compliance baseline requirement."
+
+    from app.services.ai_service import ai_service
+    synthesis = ai_service.synthesize_control_evaluation(
+        control_id=control_id,
+        control_name=control_name,
+        control_requirement=control_requirement,
+        compliance_status=compliance_status,
+        raw_note=raw_note
+    )
+
+    # Persist the synthesized note into audit_control.ai_notes
+    if synthesis.get("report_note"):
+        audit_control.ai_notes = synthesis["report_note"]
+        db.commit()
+        db.refresh(audit_control)
+
+    return {
+        "success": True,
+        "control_id": control_id,
+        "compliance_status": compliance_status,
+        "report_note": synthesis.get("report_note", ""),
+        "root_cause_analysis": synthesis.get("root_cause_analysis"),
+        "impact_analysis": synthesis.get("impact_analysis"),
+        "recommendation": synthesis.get("recommendation"),
+        "remediation_days": synthesis.get("remediation_days"),
+        "is_mock": synthesis.get("is_mock", False)
+    }

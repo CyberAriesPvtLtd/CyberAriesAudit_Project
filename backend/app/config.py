@@ -1,8 +1,13 @@
+from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-# Load variables from .env
-load_dotenv()
+# Load variables from .env (checks backend/.env and current dir)
+env_path = Path(__file__).resolve().parent.parent / ".env"
+if env_path.exists():
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv()
 
 # Read DATABASE_URL for PostgreSQL
 DATABASE_URL = os.getenv("DATABASE_URL")
@@ -22,9 +27,6 @@ ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
 ADMIN_DEFAULT_PASSWORD = os.getenv("ADMIN_DEFAULT_PASSWORD")
 
 # MinIO / S3-compatible object storage configuration.
-# Kept as plain env-driven config (not vendor-specific) so switching from
-# self-hosted MinIO to AWS S3 later only means changing these values -
-# the S3-compatible API means storage_service.py does not need to change.
 MINIO_ENDPOINT = os.getenv("MINIO_ENDPOINT", "localhost:9000")
 MINIO_ACCESS_KEY = os.getenv("MINIO_ACCESS_KEY")
 MINIO_SECRET_KEY = os.getenv("MINIO_SECRET_KEY")
@@ -33,3 +35,6 @@ MINIO_SECURE = os.getenv("MINIO_SECURE", "false").lower() == "true"
 
 if not MINIO_ACCESS_KEY or not MINIO_SECRET_KEY:
     raise ValueError("MINIO_ACCESS_KEY and MINIO_SECRET_KEY must be set in the environment.")
+
+# Google Gemini API Key for AI Auditor
+GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY", "")

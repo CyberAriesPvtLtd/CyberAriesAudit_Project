@@ -172,6 +172,7 @@ export default function ControlDetails() {
   const [clientFeedbackDraft, setClientFeedbackDraft] = useState({});
   const [savingNoteId, setSavingNoteId] = useState(null);
   const [savingFeedbackId, setSavingFeedbackId] = useState(null);
+  const [rejectingFileId, setRejectingFileId] = useState(null);
 
   // 4. Preview Modal State
   const [previewState, setPreviewState] = useState(null);
@@ -460,6 +461,7 @@ export default function ControlDetails() {
   // ─── Evidence Review Handlers ──────────────────────────────────────
   const handleApproveEvidence = async (evidenceId) => {
     try {
+      setRejectingFileId(null);
       if (updateEvidenceStatus) {
         await updateEvidenceStatus(evidenceId, 'Approved');
       } else {
@@ -474,17 +476,46 @@ export default function ControlDetails() {
 
   const handleRejectEvidence = async (evidenceId) => {
     const feedback = clientFeedbackDraft[evidenceId] || 'Deliverable is insufficient for verification. Please re-upload certified documentation.';
+    setSavingFeedbackId(evidenceId);
     try {
       if (updateEvidenceStatus) {
         await updateEvidenceStatus(evidenceId, 'Rejected', feedback);
       } else {
-        await api.updateEvidenceStatus(evidenceId, 'Rejected', user?.id);
+        await api.updateEvidenceStatus(evidenceId, 'Rejected', user?.id, feedback);
+      }
+      if (updateClientFeedback) {
+        await updateClientFeedback(evidenceId, feedback);
+      } else {
         await api.updateClientFeedback(evidenceId, feedback);
       }
       setEvidenceList(prev => prev.map(ev => ev.id === evidenceId ? { ...ev, status: 'Rejected', client_feedback: feedback } : ev));
-      showToast('Evidence marked as Rejected. Client feedback persisted.', 'success');
+      setRejectingFileId(null);
+      showToast('Evidence marked as Rejected. Client instruction sent to client dashboard.', 'success');
     } catch (err) {
+      console.error('Failed to reject evidence:', err);
       showToast('Failed to reject evidence', 'error');
+    } finally {
+      setSavingFeedbackId(null);
+    }
+  };
+
+  const handleSaveClientFeedback = async (evidenceId) => {
+    const feedbackText = clientFeedbackDraft[evidenceId] !== undefined ? clientFeedbackDraft[evidenceId] : 'Deliverable is insufficient for verification. Please re-upload certified documentation.';
+    setSavingFeedbackId(evidenceId);
+    try {
+      if (updateClientFeedback) {
+        await updateClientFeedback(evidenceId, feedbackText);
+      } else {
+        await api.updateClientFeedback(evidenceId, feedbackText);
+      }
+      await api.updateEvidenceStatus(evidenceId, 'Rejected', user?.id, feedbackText);
+      setEvidenceList(prev => prev.map(ev => ev.id === evidenceId ? { ...ev, client_feedback: feedbackText } : ev));
+      showToast('Client feedback saved! Client will see this instruction.', 'success');
+    } catch (err) {
+      console.error('Failed to save client feedback:', err);
+      showToast('Failed to save client feedback', 'error');
+    } finally {
+      setSavingFeedbackId(null);
     }
   };
 
@@ -504,21 +535,6 @@ export default function ControlDetails() {
     }
   };
 
-  const handleSaveClientFeedback = async (evidenceId) => {
-    const feedbackText = clientFeedbackDraft[evidenceId] !== undefined ? clientFeedbackDraft[evidenceId] : '';
-    setSavingFeedbackId(evidenceId);
-    try {
-      if (updateClientFeedback) {
-        await updateClientFeedback(evidenceId, feedbackText);
-      } else {
-        await api.updateClientFeedback(evidenceId, feedbackText);
-      }
-      setEvidenceList(prev => prev.map(ev => ev.id === evidenceId ? { ...ev, client_feedback: feedbackText } : ev));
-      showToast('Client feedback saved! Client will see this instruction.', 'success');
-    } finally {
-      setSavingFeedbackId(null);
-    }
-  };
 
   // Adopt Evidence-Specific Note from AI
   const handleAdoptEvidenceAINote = (evidenceId, aiNote) => {
@@ -1125,60 +1141,75 @@ export default function ControlDetails() {
                         <button
                           type="button"
                           className="btn btn-outline cd-action-reject"
-                          onClick={() => handleRejectEvidence(ev.id)}
+                          onClick={() => {
+                            if (isRejected) return;
+                            setRejectingFileId(prev => prev === ev.id ? null : ev.id);
+                          }}
                           disabled={isRejected}
-                          title="Reject deliverable & request client revision"
+                          title={isRejected ? "Evidence deliverable is rejected" : "Reject deliverable and provide client revision instruction"}
                         >
-                          <XCircle size={13} /> Reject
+                          <XCircle size={13} /> {isRejected ? 'Rejected' : 'Reject'}
                         </button>
                       </div>
                     </div>
 
-                    {/* Client Feedback Box (Sent to Client Dashboard) */}
-                    <div className="cd-feedback-row">
-                      <label className="cd-feedback-label">
-                        Client Feedback {isRejected && <span style={{ color: '#C5221F' }}>(Rejection Instruction)</span>}:
-                      </label>
-                      <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
-                        <input
-                          type="text"
-                          className="cd-feedback-input"
-                          placeholder="Feedback sent to client (e.g. why deliverable is insufficient, what to re-upload)..."
-                          value={currentFeedback}
-                          onChange={(e) => setClientFeedbackDraft({ ...clientFeedbackDraft, [ev.id]: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-secondary cd-sub-btn"
-                          onClick={() => handleSaveClientFeedback(ev.id)}
-                          disabled={savingFeedbackId === ev.id}
-                        >
-                          <Save size={12} /> {savingFeedbackId === ev.id ? 'Saving...' : 'Save Feedback'}
-                        </button>
+                    {/* Client Feedback Box: Directly connected to Reject button (shown when Rejected or actively Rejecting) */}
+                    {(isRejected || rejectingFileId === ev.id) && (
+                      <div className="cd-feedback-row" style={{ animation: 'fadeIn 0.2s ease-in-out' }}>
+                        <label className="cd-feedback-label" style={{ color: '#C5221F', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                          <AlertTriangle size={13} color="#C5221F" />
+                          Client Feedback (Rejection Instruction):
+                        </label>
+                        <div style={{ display: 'flex', gap: '6px', flex: 1, alignItems: 'center' }}>
+                          <input
+                            type="text"
+                            className="cd-feedback-input"
+                            style={{ borderColor: '#FECACA', backgroundColor: '#FFFFFF' }}
+                            placeholder="Specify reason for rejection and required client revision (sent to client dashboard)..."
+                            value={currentFeedback}
+                            onChange={(e) => setClientFeedbackDraft({ ...clientFeedbackDraft, [ev.id]: e.target.value })}
+                            autoFocus={rejectingFileId === ev.id}
+                          />
+                          <button
+                            type="button"
+                            className="btn btn-outline"
+                            style={{
+                              backgroundColor: '#DC2626',
+                              color: '#FFFFFF',
+                              borderColor: '#DC2626',
+                              fontSize: '11px',
+                              padding: '5px 10px',
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              fontWeight: '600',
+                              whiteSpace: 'nowrap'
+                            }}
+                            onClick={() => {
+                              if (isRejected) {
+                                handleSaveClientFeedback(ev.id);
+                              } else {
+                                handleRejectEvidence(ev.id);
+                              }
+                            }}
+                            disabled={savingFeedbackId === ev.id}
+                          >
+                            <XCircle size={12} />
+                            {savingFeedbackId === ev.id ? 'Saving...' : (isRejected ? 'Update Instruction' : 'Confirm & Reject')}
+                          </button>
+                          {!isRejected && (
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ fontSize: '11px', padding: '5px 8px', whiteSpace: 'nowrap' }}
+                              onClick={() => setRejectingFileId(null)}
+                            >
+                              Cancel
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Internal Auditor Workpaper Notes (Specific to this Evidence File) */}
-                    <div className="cd-evidence-notes-row">
-                      <label className="cd-notes-label">Evidence File Note (Internal):</label>
-                      <div style={{ display: 'flex', gap: '6px', flex: 1 }}>
-                        <input
-                          type="text"
-                          className="cd-evidence-notes-input"
-                          placeholder="Private audit note on this document (e.g. verified policy section 4.2)..."
-                          value={currentDraft}
-                          onChange={(e) => setEvidenceNotesDraft({ ...evidenceNotesDraft, [ev.id]: e.target.value })}
-                        />
-                        <button
-                          type="button"
-                          className="btn btn-secondary cd-sub-btn"
-                          onClick={() => handleSaveEvidenceNote(ev.id)}
-                          disabled={savingNoteId === ev.id}
-                        >
-                          <Save size={12} /> {savingNoteId === ev.id ? 'Saving...' : 'Save Note'}
-                        </button>
-                      </div>
-                    </div>
+                    )}
                   </div>
                 );
               })}

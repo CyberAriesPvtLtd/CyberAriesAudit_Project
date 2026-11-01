@@ -6,7 +6,7 @@ import { getEvidenceDownloadUrl } from '../services/api';
 import Modal from '../components/Modal';
 
 export default function ControlDetails() {
-  const { currentUser, controls, uploadEvidence, deleteEvidence, currentAudit } = useClient();
+  const { currentUser, controls, uploadEvidence, deleteEvidence, currentAudit, fetchClientData } = useClient();
   const location = useLocation();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -31,7 +31,7 @@ export default function ControlDetails() {
       uploadedBy: file.uploadedBy,
       status: file.status || 'Pending Review',
       auditorNotes: file.auditorNotes || file.auditor_notes || '',
-      clientFeedback: file.clientFeedback || file.client_feedback || '',
+      clientFeedback: file.clientFeedback || file.client_feedback || (file.status === 'Rejected' ? (file.auditorNotes || file.auditor_notes || '') : ''),
       requirement: requirements[idx] || 'Deliverable',
       evidenceItemId: file.evidenceItemId,
     }));
@@ -39,6 +39,13 @@ export default function ControlDetails() {
 
   const [uploadedFiles, setUploadedFiles] = useState(buildFilesFromControl);
   const [fileToReplace, setFileToReplace] = useState(null);
+
+  // Fetch latest data on page load to ensure auditor feedback is fresh
+  useEffect(() => {
+    if (fetchClientData) {
+      fetchClientData();
+    }
+  }, [fetchClientData]);
 
   // Sync from control whenever it changes (e.g. after a fresh fetch)
   useEffect(() => {
@@ -455,7 +462,7 @@ export default function ControlDetails() {
                                       Evidence Rejected by Auditor
                                     </div>
                                     <div style={{ fontSize: '12.5px', color: 'var(--text-secondary)', lineHeight: '1.4' }}>
-                                      <strong>Auditor Feedback:</strong> {file.clientFeedback || 'Auditor rejected this evidence. Please re-upload corrected documentation.'}
+                                      <strong style={{ color: '#991B1B' }}>Auditor Feedback:</strong> <span style={{ color: '#1F2937', fontWeight: '500' }}>{file.clientFeedback || file.client_feedback || (file.status === 'Rejected' && (file.auditorNotes || file.auditor_notes)) || 'Auditor rejected this evidence. Please re-upload corrected documentation.'}</span>
                                     </div>
                                   </div>
                                 </div>
