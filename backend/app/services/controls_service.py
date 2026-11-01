@@ -9,7 +9,7 @@ def create_control(db: Session, control_data):
 
     if existing_control:
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             detail=f"Control '{control_data.control_id}' already exists."
         )
 
@@ -79,7 +79,7 @@ def update_control(
     if "control_id" in update_dict and update_dict["control_id"] != control.control_id:
         if db.query(Controls).filter(Controls.control_id == update_dict["control_id"]).first():
             raise HTTPException(
-                status_code=400,
+                status_code=409,
                 detail="Another control with this control_id already exists."
             )
 
@@ -110,6 +110,4 @@ def delete_control(
     db.delete(control)
     db.commit()
 
-    return {
-        "message": "Control deleted successfully"
-    }
+    return None

@@ -17,7 +17,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=CompanyResponse)
+@router.post("/", response_model=CompanyResponse, status_code=201)
 def add_company(
     company: CompanyCreate,
     db: Session = Depends(get_db)
@@ -48,7 +48,7 @@ def edit_company(
 ):
     return update_company(db, company_id, company)
 
-@router.delete("/{company_id}")
+@router.delete("/{company_id}", status_code=204)
 def remove_company(
     company_id: str,
     db: Session = Depends(get_db)

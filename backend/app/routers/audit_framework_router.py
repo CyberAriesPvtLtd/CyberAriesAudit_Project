@@ -24,7 +24,7 @@ router = APIRouter(
 )
 
 
-@router.post("/", response_model=AuditFrameworkResponse)
+@router.post("/", response_model=AuditFrameworkResponse, status_code=201)
 def add_audit_framework(
     audit_framework: AuditFrameworkCreate,
     db: Session = Depends(get_db)
@@ -64,7 +64,7 @@ def edit_audit_framework(
     return update_audit_framework(db,audit_framework_id,audit_framework)
 
 
-@router.delete("/{audit_framework_id}")
+@router.delete("/{audit_framework_id}", status_code=204)
 def remove_audit_framework(
     audit_framework_id: str,
     db: Session = Depends(get_db)

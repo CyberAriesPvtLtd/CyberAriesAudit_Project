@@ -21,7 +21,7 @@ def create_user(db: Session, user_data):
 
     if existing_user:
         raise HTTPException(
-            status_code=400,
+            status_code=409,
             detail="Username or Email already exists"
         )
 
@@ -88,11 +88,20 @@ def update_user(db: Session, user_id: str, user_data):
     
     update_dict = user_data.model_dump(exclude_unset=True)
 
+    if "email" in update_dict:
+        new_email = update_dict["email"]
+        existing_email_user = db.query(User).filter(
+            User.email_id == new_email, User.id != user_id
+        ).first()
+        if existing_email_user:
+            raise HTTPException(
+                status_code=409,
+                detail="Email is already in use by another user"
+            )
+        update_dict["email_id"] = update_dict.pop("email")
+
     if "password" in update_dict:
         update_dict["password"] = hash_password(update_dict["password"])
-
-    if "email" in update_dict:
-        update_dict["email_id"] = update_dict.pop("email")
 
     for key, value in update_dict.items():
         if hasattr(user, key):
@@ -149,6 +158,4 @@ def delete_user(db: Session, user_id: str):
     db.delete(user)
     db.commit()
 
-    return {
-        "message": "User deleted successfully"
-    }
+    return None

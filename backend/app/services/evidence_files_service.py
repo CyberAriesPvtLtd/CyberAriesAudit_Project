@@ -1,5 +1,6 @@
 from fastapi import HTTPException
 from sqlalchemy.orm import Session, joinedload
+from datetime import datetime, timezone
 
 from app.models.evidence_files import EvidenceItem
 from app.models.audit_control_evidence import AuditControlEvidence
@@ -89,9 +90,9 @@ def confirm_evidence_upload(db: Session, evidence_item_id: str, data):
                 cross_refs = db.query(ControlCrossReference).filter(
                     ControlCrossReference.source_control_code == uploaded_control.control_id
                 ).all()
-                
+
                 target_codes = [cr.target_control_code for cr in cross_refs]
-                
+
                 if target_codes:
                     # Find AuditControls in the SAME company that match these target codes
                     matching_audit_controls = (
@@ -104,7 +105,7 @@ def confirm_evidence_upload(db: Session, evidence_item_id: str, data):
                         )
                         .all()
                     )
-                    
+
                     for target_ac in matching_audit_controls:
                         links_created.append(
                             _link_evidence_to_control(
@@ -152,6 +153,7 @@ def get_company_evidence(db: Session, company_id: str):
     return (
         db.query(EvidenceItem)
         .filter(EvidenceItem.company_id == company_id)
+        .filter(EvidenceItem.is_superseded == False)
         .order_by(EvidenceItem.created_at.desc())
         .all()
     )
@@ -161,7 +163,23 @@ def get_evidence_for_audit_control(db: Session, audit_control_id: str):
     return (
         db.query(AuditControlEvidence)
         .options(joinedload(AuditControlEvidence.evidence_item))
+        .join(AuditControlEvidence.evidence_item)
         .filter(AuditControlEvidence.audit_control_id == audit_control_id)
+        .filter(EvidenceItem.is_superseded == False)
+        .all()
+    )
+
+
+def get_evidence_for_multiple_controls(db: Session, audit_control_ids: list[str]):
+    return (
+        db.query(AuditControlEvidence)
+        .options(
+            joinedload(AuditControlEvidence.evidence_item)
+            .joinedload(EvidenceItem.user)
+        )
+        .join(AuditControlEvidence.evidence_item)
+        .filter(AuditControlEvidence.audit_control_id.in_(audit_control_ids))
+        .filter(EvidenceItem.is_superseded == False)
         .all()
     )
 
@@ -195,7 +213,7 @@ def unlink_evidence(db: Session, audit_control_evidence_id: str):
     db.delete(link)
     db.commit()
 
-    return {"message": "Evidence unlinked from this audit control"}
+    return None
 
 
 def update_evidence_item(db: Session, evidence_item_id: str, data):
@@ -204,6 +222,11 @@ def update_evidence_item(db: Session, evidence_item_id: str, data):
         raise HTTPException(status_code=404, detail="Evidence Item not found")
 
     update_dict = data.model_dump(exclude_unset=True)
+    
+    if "status" in update_dict and "reviewed_by" in update_dict:
+        if update_dict["status"] in ["Approved", "Rejected"]:
+            evidence.reviewed_at = datetime.now(timezone.utc)
+            
     for key, value in update_dict.items():
         setattr(evidence, key, value)
 
@@ -217,6 +240,14 @@ def delete_evidence_item(db: Session, evidence_item_id: str):
     if not evidence:
         raise HTTPException(status_code=404, detail="Evidence Item not found")
 
+    # Soft Delete Logic: If it has already been reviewed (e.g., Rejected), we keep the historical record.
+    # If it is still "Pending Review", it means the client made a mistake uploading and we can hard-delete to save space.
+    if evidence.status != "Pending Review":
+        evidence.is_superseded = True
+        db.commit()
+        return {"message": "Evidence Item marked as superseded successfully"}
+
+    # Hard Delete
     storage_service.delete_object(evidence.storage_key)
     db.delete(evidence)  # cascades to audit_control_links
     db.commit()
@@ -238,4 +269,28 @@ def get_presigned_download(db: Session, evidence_item_id: str):
         "mime_type": evidence.mime_type,
         "file_size": evidence.file_size,
     }
+
+
+def update_auditor_notes(db: Session, evidence_item_id: str, data):
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_item_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence Item not found")
+
+    evidence.auditor_notes = data.auditor_notes
+
+    db.commit()
+    db.refresh(evidence)
+    return evidence
+
+
+def update_client_feedback(db: Session, evidence_item_id: str, client_feedback: str):
+    evidence = db.query(EvidenceItem).filter(EvidenceItem.id == evidence_item_id).first()
+    if not evidence:
+        raise HTTPException(status_code=404, detail="Evidence Item not found")
+
+    evidence.client_feedback = client_feedback
+
+    db.commit()
+    db.refresh(evidence)
+    return evidence
 

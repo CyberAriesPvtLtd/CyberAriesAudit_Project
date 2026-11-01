@@ -37,6 +37,15 @@ def require_admin(current_user: User = Depends(get_current_user)):
             detail="Operation not permitted. Admin role required."
         )
     return current_user
+
+def require_auditor(current_user: User = Depends(get_current_user)):
+    if current_user.role.value != "auditor":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Operation not permitted. Auditor role required."
+        )
+    return current_user
+
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(
         plain_password.encode('utf-8'), 
